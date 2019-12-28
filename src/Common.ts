@@ -25,3 +25,8 @@ const getIdDispatcher: <State, Action>() => Dispatch<ReducerAction<Reducer<State
 
 export const noop = () => {};
 export const Unit = Symbol("unit");
+
+export type ValueOf<T> = T[keyof T];
+export type ExtractAction<T extends { [key: string]: (...args: any) => object }> = ValueOf<
+    { [K in keyof T]: ReturnType<T[K]> }
+>;
