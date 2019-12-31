@@ -13,26 +13,34 @@ import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import Send from "@material-ui/icons/Send"
 import * as io from "socket.io-client"
-import { feedbackFactory, getDispatchContext, noop, Unit, ExtractAction } from "./Common"
-import { ActionKind } from "./Constants";
-import { Message, UserId } from "./Model";
-
-import * as ActionCreators from "./ActionCreators";
+import {feedbackFactory, getDispatchContext, noop, TypeFromCreator, Unit} from "./Common"
+import {Message, UserId} from "./Model";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
-enum StateKind { LoadingConversation, DisplayingMessages, DisplayingError }
-type ErrorState = { kind: StateKind.DisplayingError, errorMessage: string };
-type LoadingState = { kind: StateKind.LoadingConversation };
-type DisplayingState = { kind: StateKind.DisplayingMessages, messages: Array<Message>, messageToSend?: Message };
-type State = LoadingState | DisplayingState | ErrorState
+enum StateKind { LoadingConversation, DisplayingMessages, DisplayingError}
+const StateCreator = {
+    errorState: (errorMessage: string) => ({kind: StateKind.DisplayingError, errorMessage} as const),
+    loadingState: () => ({kind: StateKind.LoadingConversation} as const),
+    displayingState: (messages: Array<Message>, messageToSend?: Message) => ({
+        kind: StateKind.DisplayingMessages,
+        messages,
+        messageToSend
+    } as const),
+};
+enum ActionKind { ErrorOccurred, NewMessage, ConversationLoaded, SendMessage, MessageSent}
+const ActionCreator = {
+    errorOccurred: (errorMessage: string) => ({ kind: ActionKind.ErrorOccurred, errorMessage, } as const),
+    conversationLoaded: (messages: Array<Message>) => ({ kind: ActionKind.ConversationLoaded, messages, } as const),
+    messageSent: () => ({ kind: ActionKind.MessageSent, } as const),
+    newMessage: (message: Message) => ({ kind: ActionKind.NewMessage, message, } as const),
+    sendMessage: (message: Message) => ({ kind: ActionKind.SendMessage, message, } as const),
+};
 
-const errorState: (errorMessage: string) => ErrorState =
-    errorMessage => ({kind: StateKind.DisplayingError, errorMessage: errorMessage});
-const initialState: State = {kind: StateKind.LoadingConversation};
+type State = TypeFromCreator<typeof StateCreator>
+type Action = TypeFromCreator<typeof ActionCreator>
 
-
-type Action = ExtractAction<typeof ActionCreators>;
+const initialState: State = StateCreator.loadingState();
 
 // Dependencies
 let socket: SocketIOClient.Socket | null = null;
@@ -48,19 +56,19 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
             case ActionKind.MessageSent:
                 return state.kind === StateKind.DisplayingMessages ?
                     {...state, messageToSend: undefined} :
-                    errorState("MessageSent");
+                    StateCreator.errorState("MessageSent");
             case ActionKind.NewMessage:
                 return state.kind === StateKind.DisplayingMessages ?
                     {...state, messages: [...state.messages, action.message]} :
-                    errorState("NewMessage");
+                    StateCreator.errorState("NewMessage");
             case ActionKind.SendMessage:
                 return state.kind === StateKind.DisplayingMessages && !state.messageToSend ?
                     {...state, messageToSend: {...action.message, userId: me}} :
-                    errorState("SendMessage");
+                    StateCreator.errorState("SendMessage");
             case ActionKind.ConversationLoaded:
                 return state.kind === StateKind.LoadingConversation ?
-                    {kind: StateKind.DisplayingMessages, messages: action.messages} :
-                    errorState("ConversationLoaded");
+                    StateCreator.displayingState(action.messages) :
+                    StateCreator.errorState("ConversationLoaded");
         }
     };
 
@@ -70,8 +78,8 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
         _ => {
             socket = io.connect("http://localhost:5000");
-            socket.on("connect", () => dispatch(ActionCreators.conversationLoaded([])));
-            socket.on("chat message", (message: Message) => dispatch(ActionCreators.newMessage(message)));
+            socket.on("connect", () => dispatch(ActionCreator.conversationLoaded([])));
+            socket.on("chat message", (message: Message) => dispatch(ActionCreator.newMessage(message)));
             return () => socket?.close();
         }
     );
@@ -79,7 +87,7 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
         message => {
             socket?.emit("chat message", message);
-            dispatch(ActionCreators.messageSent());
+            setTimeout(() => dispatch(ActionCreator.messageSent()), 3000);
             return noop;
         }
     );
@@ -123,12 +131,16 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         }
     }
 
+    function isMessageToSend(state: State): boolean {
+        return state.kind === StateKind.DisplayingMessages && !state.messageToSend
+    }
+
     return (
         <DispatchContext.Provider value={dispatch}>
             <Container fixed maxWidth="xs" className={clsx(classes.boxed)}>
                 <CssBaseline/>
                 {content(state)}
-                <ChatInput/>
+                <ChatInput enabled={isMessageToSend(state)}/>
             </Container>
         </DispatchContext.Provider>
     );
@@ -182,7 +194,8 @@ const ChatMessage: React.FC<{ message: string, align: string }> = ({message, ali
     );
 };
 
-function ChatInput() {
+// function ChatInput() {
+const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
 
     // UI State
     const [message, setMessage] = useState("");
@@ -194,7 +207,7 @@ function ChatInput() {
     const sendMessage = () => {
         const messageToSend = message.trim(); // does this shit trim in place? NO
         if (messageToSend === '') return;
-        dispatch(ActionCreators.sendMessage({ id: uuid(), message: messageToSend }));
+        dispatch(ActionCreator.sendMessage({id: uuid(), message: messageToSend}));
         setMessage("");
     };
 
@@ -202,6 +215,7 @@ function ChatInput() {
         <FormControl className={clsx(classes.marginBottom, classes.textField)}>
             <InputLabel htmlFor="message">Message</InputLabel>
             <Input
+                disabled={!enabled}
                 id="message"
                 type='text'
                 value={message}
