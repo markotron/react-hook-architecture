@@ -13,8 +13,11 @@ import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import Send from "@material-ui/icons/Send"
 import * as io from "socket.io-client"
-import {feedbackFactory, getDispatchContext, noop, Unit} from "./Common"
-import {Message, UserId} from "./Model";
+import { feedbackFactory, getDispatchContext, noop, Unit, ExtractAction } from "./Common"
+import { ActionKind } from "./Constants";
+import { Message, UserId } from "./Model";
+
+import * as ActionCreators from "./ActionCreators";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -28,13 +31,8 @@ const errorState: (errorMessage: string) => ErrorState =
     errorMessage => ({kind: StateKind.DisplayingError, errorMessage: errorMessage});
 const initialState: State = {kind: StateKind.LoadingConversation};
 
-enum ActionKind { ErrorOccurred, NewMessage, ConversationLoaded, SendMessage, MessageSent}
-type Action =
-    { kind: ActionKind.ErrorOccurred, errorMessage: string } |
-    { kind: ActionKind.ConversationLoaded, messages: Array<Message> } |
-    { kind: ActionKind.MessageSent } |
-    { kind: ActionKind.NewMessage, message: Message } |
-    { kind: ActionKind.SendMessage, message: Message };
+
+type Action = ExtractAction<typeof ActionCreators>;
 
 // Dependencies
 let socket: SocketIOClient.Socket | null = null;
@@ -72,8 +70,8 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
         _ => {
             socket = io.connect("http://localhost:5000");
-            socket.on("connect", () => dispatch({kind: ActionKind.ConversationLoaded, messages: []}));
-            socket.on("chat message", (message: Message) => dispatch({kind: ActionKind.NewMessage, message}));
+            socket.on("connect", () => dispatch(ActionCreators.conversationLoaded([])));
+            socket.on("chat message", (message: Message) => dispatch(ActionCreators.newMessage(message)));
             return () => socket?.close();
         }
     );
@@ -81,7 +79,7 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
         message => {
             socket?.emit("chat message", message);
-            dispatch({kind: ActionKind.MessageSent});
+            dispatch(ActionCreators.messageSent());
             return noop;
         }
     );
@@ -194,9 +192,9 @@ function ChatInput() {
     const dispatch = useContext(DispatchContext);
 
     const sendMessage = () => {
-        const messageToSend = message.trim(); // does this shit trim in place?
+        const messageToSend = message.trim(); // does this shit trim in place? NO
         if (messageToSend === '') return;
-        dispatch({kind: ActionKind.SendMessage, message: {id: uuid(), message: messageToSend}});
+        dispatch(ActionCreators.sendMessage({ id: uuid(), message: messageToSend }));
         setMessage("");
     };
 
