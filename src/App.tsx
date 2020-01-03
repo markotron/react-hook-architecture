@@ -45,11 +45,11 @@ enum ActionKind {
 
 const ActionCreator = {
     errorOccurred: (errorMessage: string) => ({kind: ActionKind.ErrorOccurred, errorMessage,} as const),
-    conversationLoaded: (messages: Array<Message>) => ({kind: ActionKind.ConversationLoaded, messages,} as const),
+    conversationLoaded: () => ({kind: ActionKind.ConversationLoaded,} as const),
     messageSent: () => ({kind: ActionKind.MessageSent,} as const),
     newMessage: (message: Message) => ({kind: ActionKind.NewMessage, message,} as const),
     sendMessage: (message: Message) => ({kind: ActionKind.SendMessage, message,} as const),
-    loadOlderMessages: () => ({kind: ActionKind.LoadOlderMessages, } as const),
+    loadOlderMessages: () => ({kind: ActionKind.LoadOlderMessages,} as const),
     olderMessagesLoaded: (messages: Array<Message>) => ({kind: ActionKind.OlderMessagesLoaded, messages} as const),
 };
 type State = TypeFromCreator<typeof StateCreator>
@@ -82,7 +82,7 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
                     StateCreator.errorState("SendMessage");
             case ActionKind.ConversationLoaded:
                 return state.kind === StateKind.LoadingConversation ?
-                    StateCreator.displayingState(action.messages, undefined, null) :
+                    StateCreator.displayingState([], undefined, null) :
                     StateCreator.errorState("ConversationLoaded");
             case ActionKind.LoadOlderMessages:
                 return state.kind === StateKind.DisplayingMessages ?
@@ -101,7 +101,7 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
         _ => {
             socket = io.connect("http://localhost:5000");
-            socket.on("connect", () => dispatch(ActionCreator.conversationLoaded([])));
+            socket.on("connect", () => dispatch(ActionCreator.conversationLoaded()));
             socket.on("new-message", (message: Message) => dispatch(ActionCreator.newMessage(message)));
             return () => socket?.close();
         }
@@ -125,10 +125,10 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
             const root = 'http://localhost:5000/oldMessages';
             const suff = uuid === Unit ? "" : `?uuid=${uuid}`;
             fetch(root + suff)
-                .then((res) => res.json())
-                .then((res) => dispatch(ActionCreator.olderMessagesLoaded(res)))
-                .catch((reason) => dispatch(ActionCreator.errorOccurred(reason)));
-            return noop;
+            .then((res) => res.json())
+            .then((res) => dispatch(ActionCreator.olderMessagesLoaded(res)))
+            .catch((reason) => dispatch(ActionCreator.errorOccurred(reason)));
+            return noop; // ideally we'd like to cancel this guy.
         }
     );
     // UI
