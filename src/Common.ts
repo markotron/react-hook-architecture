@@ -27,6 +27,3 @@ export const noop = () => {};
 export const Unit = Symbol("unit");
 
 export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
-
-type T = { firstName: string, lastName: string, telephone: number }
-type K = T[keyof T] // T["firstName" | "lastName" | "telephone"]

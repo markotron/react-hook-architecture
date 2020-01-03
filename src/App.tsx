@@ -11,32 +11,47 @@ import InputLabel from "@material-ui/core/InputLabel";
 import Input from "@material-ui/core/Input";
 import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
+import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
 import * as io from "socket.io-client"
 import {feedbackFactory, getDispatchContext, noop, TypeFromCreator, Unit} from "./Common"
-import {Message, UserId} from "./Model";
+import {Message, UserId, Uuid} from "./Model";
+import axios from "axios";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
 enum StateKind { LoadingConversation, DisplayingMessages, DisplayingError}
+
 const StateCreator = {
     errorState: (errorMessage: string) => ({kind: StateKind.DisplayingError, errorMessage} as const),
     loadingState: () => ({kind: StateKind.LoadingConversation} as const),
-    displayingState: (messages: Array<Message>, messageToSend?: Message) => ({
+    displayingState: (messages: Array<Message>, messageToSend?: Message, loadMessagesBefore?: Uuid | null) => ({
         kind: StateKind.DisplayingMessages,
         messages,
-        messageToSend
+        messageToSend,
+        loadMessagesBefore,
     } as const),
 };
-enum ActionKind { ErrorOccurred, NewMessage, ConversationLoaded, SendMessage, MessageSent}
-const ActionCreator = {
-    errorOccurred: (errorMessage: string) => ({ kind: ActionKind.ErrorOccurred, errorMessage, } as const),
-    conversationLoaded: (messages: Array<Message>) => ({ kind: ActionKind.ConversationLoaded, messages, } as const),
-    messageSent: () => ({ kind: ActionKind.MessageSent, } as const),
-    newMessage: (message: Message) => ({ kind: ActionKind.NewMessage, message, } as const),
-    sendMessage: (message: Message) => ({ kind: ActionKind.SendMessage, message, } as const),
-};
 
+enum ActionKind {
+    ErrorOccurred,
+    NewMessage,
+    ConversationLoaded,
+    SendMessage,
+    MessageSent,
+    LoadOlderMessages,
+    OlderMessagesLoaded,
+}
+
+const ActionCreator = {
+    errorOccurred: (errorMessage: string) => ({kind: ActionKind.ErrorOccurred, errorMessage,} as const),
+    conversationLoaded: (messages: Array<Message>) => ({kind: ActionKind.ConversationLoaded, messages,} as const),
+    messageSent: () => ({kind: ActionKind.MessageSent,} as const),
+    newMessage: (message: Message) => ({kind: ActionKind.NewMessage, message,} as const),
+    sendMessage: (message: Message) => ({kind: ActionKind.SendMessage, message,} as const),
+    loadOlderMessages: () => ({kind: ActionKind.LoadOlderMessages, } as const),
+    olderMessagesLoaded: (messages: Array<Message>) => ({kind: ActionKind.OlderMessagesLoaded, messages} as const),
+};
 type State = TypeFromCreator<typeof StateCreator>
 type Action = TypeFromCreator<typeof ActionCreator>
 
@@ -67,8 +82,16 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
                     StateCreator.errorState("SendMessage");
             case ActionKind.ConversationLoaded:
                 return state.kind === StateKind.LoadingConversation ?
-                    StateCreator.displayingState(action.messages) :
+                    StateCreator.displayingState(action.messages, undefined, null) :
                     StateCreator.errorState("ConversationLoaded");
+            case ActionKind.LoadOlderMessages:
+                return state.kind === StateKind.DisplayingMessages ?
+                    {...state, loadMessagesBefore: state.messages[0]?.id} :
+                    StateCreator.errorState("LoadOlderMessages");
+            case ActionKind.OlderMessagesLoaded:
+                return state.kind === StateKind.DisplayingMessages ?
+                    {...state, messages: [...action.messages, ...state.messages], loadMessagesBefore: undefined} :
+                    StateCreator.errorState("OlderMessagesLoaded");
         }
     };
 
@@ -79,15 +102,32 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         _ => {
             socket = io.connect("http://localhost:5000");
             socket.on("connect", () => dispatch(ActionCreator.conversationLoaded([])));
-            socket.on("chat message", (message: Message) => dispatch(ActionCreator.newMessage(message)));
+            socket.on("new-message", (message: Message) => dispatch(ActionCreator.newMessage(message)));
             return () => socket?.close();
         }
     );
     useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
         message => {
-            socket?.emit("chat message", message);
-            setTimeout(() => dispatch(ActionCreator.messageSent()), 3000);
+            socket?.emit("new-message", message);
+            dispatch(ActionCreator.messageSent());
+            return noop;
+        }
+    );
+    useFeedback(
+        s => {
+            if (s.kind !== StateKind.DisplayingMessages) return null;
+            if (s.loadMessagesBefore === undefined) return null;
+            if (s.loadMessagesBefore === null) return Unit;
+            return s.loadMessagesBefore
+        },
+        uuid => {
+            const root = 'http://localhost:5000/oldMessages';
+            const suff = uuid === Unit ? "" : `?uuid=${uuid}`;
+            fetch(root + suff)
+                .then((res) => res.json())
+                .then((res) => dispatch(ActionCreator.olderMessagesLoaded(res)))
+                .catch((reason) => dispatch(ActionCreator.errorOccurred(reason)));
             return noop;
         }
     );
@@ -96,11 +136,11 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
 
     function getMessagesUI(messages: Array<Message>) {
         return (
-            <React.Fragment>
+            <div>
                 {messages.map(m => <ChatMessage key={m.id}
                                                 message={m.message}
                                                 align={m.userId === me ? 'right' : 'left'}/>)}
-            </React.Fragment>
+            </div>
         );
     }
 
@@ -139,6 +179,12 @@ const Chat: React.FC<{ me: UserId }> = ({me}) => {
         <DispatchContext.Provider value={dispatch}>
             <Container fixed maxWidth="xs" className={clsx(classes.boxed)}>
                 <CssBaseline/>
+                <Button
+                    disabled={state.kind !== StateKind.DisplayingMessages || state.loadMessagesBefore != null}
+                    variant="contained"
+                    onClick={() => dispatch(ActionCreator.loadOlderMessages())}>
+                    Load more
+                </Button>
                 {content(state)}
                 <ChatInput enabled={isMessageToSend(state)}/>
             </Container>
