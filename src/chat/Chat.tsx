@@ -11,112 +11,42 @@ import IconButton from "@material-ui/core/IconButton";
 import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
 import * as io from "socket.io-client"
-import {feedbackFactory, getDispatchContext, noop, safe, TypeFromCreator, Unit} from "../Common"
-import {Message, UserId, Uuid} from "./Model";
-import React, {Reducer, useContext, useReducer, useState} from 'react';
+import {feedbackFactory, getDispatchContext, noop, assertNever, Unit} from "../Common"
+import {Message, UserId} from "./Model";
+import React, {useContext, useReducer, useState} from 'react';
 import {Set} from "immutable";
+import {
+    Action,
+    ConversationLoaded,
+    ErrorOccured,
+    initialState,
+    LoadOlderMessages,
+    MessageSent,
+    NewMessage,
+    OlderMessagesLoaded,
+    reducerWithProps,
+    SendMessage,
+    State,
+    StateKind,
+    UserTyping
+} from "./StateMachine";
 
 const DispatchContext = getDispatchContext<State, Action>();
-
-enum StateKind { LoadingConversation, DisplayingMessages, DisplayingError}
-
-const StateCreator = {
-    errorState: (errorMessage: string) => ({kind: StateKind.DisplayingError, errorMessage} as const),
-    loadingState: () => ({kind: StateKind.LoadingConversation} as const),
-    displayingState: (
-        messages: Array<Message>,
-        messageToSend?: Message,
-        loadMessagesBefore?: Uuid | null,
-        usersTyping: Set<UserId> = Set(),
-    ) => ({
-        kind: StateKind.DisplayingMessages,
-        messages,
-        messageToSend,
-        loadMessagesBefore,
-        usersTyping,
-    } as const),
-};
-
-enum ActionKind {
-    ErrorOccurred,
-    NewMessage,
-    ConversationLoaded,
-    SendMessage,
-    MessageSent,
-    LoadOlderMessages,
-    OlderMessagesLoaded,
-    UserTyping,
-}
-
-const ActionCreator = {
-    errorOccurred: (errorMessage: string) => ({kind: ActionKind.ErrorOccurred, errorMessage,} as const),
-    conversationLoaded: () => ({kind: ActionKind.ConversationLoaded,} as const),
-    messageSent: () => ({kind: ActionKind.MessageSent,} as const),
-    newMessage: (message: Message) => ({kind: ActionKind.NewMessage, message,} as const),
-    sendMessage: (message: Message) => ({kind: ActionKind.SendMessage, message,} as const),
-    loadOlderMessages: () => ({kind: ActionKind.LoadOlderMessages,} as const),
-    olderMessagesLoaded: (messages: Array<Message>) => ({kind: ActionKind.OlderMessagesLoaded, messages} as const),
-    userTyping: (typing: boolean, userId?: UserId) => ({kind: ActionKind.UserTyping, userId, typing} as const),
-};
-type State = TypeFromCreator<typeof StateCreator>
-type Action = TypeFromCreator<typeof ActionCreator>
-
-const initialState: State = StateCreator.loadingState();
-
-const updateTyping = (usersTyping: Set<UserId>, id: UserId, typing: boolean) =>
-    typing ? usersTyping.add(id) : usersTyping.delete(id);
 
 // Dependencies
 let socket: SocketIOClient.Socket | null = null;
 
 export const Chat: React.FC<{ me: UserId }> = ({me}) => {
 
-    const reducer: Reducer<State, Action> = (state: State, action: Action) => {
-        console.debug(`State: ${JSON.stringify(state)}, Action: ${JSON.stringify(action)}`);
-
-        switch (action.kind) {
-            case ActionKind.ErrorOccurred:
-                return {kind: StateKind.DisplayingError, errorMessage: action.errorMessage};
-            case ActionKind.MessageSent:
-                return state.kind === StateKind.DisplayingMessages ?
-                    {...state, messageToSend: undefined} :
-                    StateCreator.errorState("MessageSent");
-            case ActionKind.NewMessage:
-                return state.kind === StateKind.DisplayingMessages ?
-                    {...state, messages: [...state.messages, action.message]} :
-                    StateCreator.errorState("NewMessage");
-            case ActionKind.SendMessage:
-                return state.kind === StateKind.DisplayingMessages && !state.messageToSend ?
-                    {...state, messageToSend: {...action.message, userId: me}} :
-                    StateCreator.errorState("SendMessage");
-            case ActionKind.ConversationLoaded:
-                return state.kind === StateKind.LoadingConversation ?
-                    StateCreator.displayingState([], undefined, null) :
-                    StateCreator.errorState("ConversationLoaded");
-            case ActionKind.LoadOlderMessages:
-                return state.kind === StateKind.DisplayingMessages ?
-                    {...state, loadMessagesBefore: state.messages[0]?.id} :
-                    StateCreator.errorState("LoadOlderMessages");
-            case ActionKind.OlderMessagesLoaded:
-                return state.kind === StateKind.DisplayingMessages ?
-                    {...state, messages: [...action.messages, ...state.messages], loadMessagesBefore: undefined} :
-                    StateCreator.errorState("OlderMessagesLoaded");
-            case ActionKind.UserTyping:
-                return state.kind === StateKind.DisplayingMessages ?
-                    {...state, usersTyping: updateTyping(state.usersTyping, action.userId ?? me, action.typing)} :
-                    StateCreator.errorState("UserTyping");
-        }
-    };
-
-    const [state, dispatch] = useReducer(reducer, initialState);
+    const [state, dispatch] = useReducer(reducerWithProps(me), initialState);
     const useFeedback = feedbackFactory(state);
     useFeedback(
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
         _ => {
             socket = io.connect("http://localhost:5000");
-            socket.on("connect", () => dispatch(ActionCreator.conversationLoaded()));
-            socket.on("new-message", (message: Message) => dispatch(ActionCreator.newMessage(message)));
-            socket.on("user-typing", ([id, typing]: [UserId, boolean]) => dispatch(ActionCreator.userTyping(typing, id)));
+            socket.on("connect", () => dispatch(new ConversationLoaded()));
+            socket.on("new-message", (message: Message) => dispatch(new NewMessage(message)));
+            socket.on("user-typing", ([id, isTyping]: [UserId, boolean]) => dispatch(new UserTyping(isTyping, id)));
             return () => socket?.close();
         }
     );
@@ -124,7 +54,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
         s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
         message => {
             socket?.emit("new-message", message);
-            dispatch(ActionCreator.messageSent());
+            dispatch(new MessageSent());
             return noop;
         }
     );
@@ -140,8 +70,8 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             const suff = uuid === Unit ? "" : `?uuid=${uuid}`;
             fetch(root + suff)
             .then((res) => res.json())
-            .then((res) => dispatch(ActionCreator.olderMessagesLoaded(res)))
-            .catch((reason) => dispatch(ActionCreator.errorOccurred(reason)));
+            .then((res) => dispatch(new OlderMessagesLoaded(res)))
+            .catch((reason) => dispatch(new ErrorOccured(reason)));
             return noop; // ideally we'd like to cancel this guy.
         }
     );
@@ -191,7 +121,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             case StateKind.DisplayingError:
                 return getErrorUI(state.errorMessage);
             default:
-                safe(state);
+                assertNever(state);
         }
     }
 
@@ -209,7 +139,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
                 <Button
                     disabled={state.kind !== StateKind.DisplayingMessages || state.loadMessagesBefore != null}
                     variant="contained"
-                    onClick={() => dispatch(ActionCreator.loadOlderMessages())}>
+                    onClick={() => dispatch(new LoadOlderMessages())}>
                     Load more
                 </Button>
                 {content(state)}
@@ -290,8 +220,8 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
     const sendMessage = () => {
         const messageToSend = message.trim(); // does this shit trim in place? NO
         if (messageToSend === '') return;
-        dispatch(ActionCreator.sendMessage({id: uuid(), message: messageToSend}));
-        dispatch(ActionCreator.userTyping(false));
+        dispatch(new SendMessage({id: uuid(), message: messageToSend}));
+        dispatch(new UserTyping(false));
         setMessage("");
     };
 
@@ -306,7 +236,7 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
                 onChange={(e) => {
                     const text = e.target.value;
                     setMessage(text);
-                    dispatch(ActionCreator.userTyping(text !== ""));
+                    dispatch(new UserTyping(text !== ""));
                 }}
                 onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : null}
                 endAdornment={

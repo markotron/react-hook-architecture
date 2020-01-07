@@ -24,8 +24,11 @@ const getIdDispatcher: <State, Action>() => Dispatch<ReducerAction<Reducer<State
 };
 
 export const noop = () => {};
+export function unsupportedAction<State, Action>(state: State, action: Action): never {
+    throw Error(`Cannot dispatch action ${JSON.stringify(action)} while state is ${JSON.stringify(state)}`);
+}
 export const Unit = Symbol("unit");
 
 export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
 
-export function safe(state: never) { throw Error(); }
+export function assertNever(state: never): never { throw Error(); }
