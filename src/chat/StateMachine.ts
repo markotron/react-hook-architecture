@@ -1,7 +1,8 @@
 import {Message, UserId, Uuid} from "./Model";
 import {Set} from "immutable";
-import {Reducer} from "react";
-import {assertNever, unsupportedAction} from "../Common";
+import {Dispatch, Reducer} from "react";
+import {assertNever, feedbackFactory, noop, Unit, unsupportedAction} from "../Common";
+import * as io from "socket.io-client";
 
 // @formatter:off
 /**
@@ -116,3 +117,54 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
     }
 };
 
+// Dependencies
+let socket: SocketIOClient.Socket | null = null;
+
+/**
+ * Feedbacks
+ */
+export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action>) => {
+    const useFeedback = feedbackFactory(state);
+    useFeedback(
+        s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
+        _ => {
+            socket = io.connect("http://localhost:5000");
+            socket.on("connect", () => dispatch(new ConversationLoaded()));
+            socket.on("new-message", (message: Message) => dispatch(new NewMessage(message)));
+            socket.on("user-typing", ([id, isTyping]: [UserId, boolean]) => dispatch(new UserTyping(isTyping, id)));
+            return () => socket?.close();
+        }
+    );
+    useFeedback(
+        s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
+        message => {
+            socket?.emit("new-message", message);
+            dispatch(new MessageSent());
+            return noop;
+        }
+    );
+    useFeedback(
+        s => {
+            if (s.kind !== StateKind.DisplayingMessages) return null;
+            if (s.loadMessagesBefore === undefined) return null;
+            if (s.loadMessagesBefore === null) return Unit;
+            return s.loadMessagesBefore
+        },
+        uuid => {
+            const root = `http://localhost:5000/messages`;
+            const suff = uuid === Unit ? "" : `?uuid=${uuid}`;
+            fetch(root + suff)
+            .then((res) => res.json())
+            .then((res) => dispatch(new OlderMessagesLoaded(res)))
+            .catch((reason) => dispatch(new ErrorOccured(reason)));
+            return noop; // ideally we'd like to cancel this guy.
+        }
+    );
+    useFeedback(
+        s => s.kind === StateKind.DisplayingMessages ? s.usersTyping.contains(me) : null,
+        amITyping => {
+            socket?.emit("user-typing", [me, amITyping]);
+            return noop;
+        }
+    );
+};
