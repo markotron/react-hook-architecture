@@ -11,9 +11,10 @@ import IconButton from "@material-ui/core/IconButton";
 import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
 import * as io from "socket.io-client"
-import {feedbackFactory, getDispatchContext, noop, TypeFromCreator, Unit} from "../Common"
+import {feedbackFactory, getDispatchContext, noop, safe, TypeFromCreator, Unit} from "../Common"
 import {Message, UserId, Uuid} from "./Model";
 import React, {Reducer, useContext, useReducer, useState} from 'react';
+import {Set} from "immutable";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -22,11 +23,17 @@ enum StateKind { LoadingConversation, DisplayingMessages, DisplayingError}
 const StateCreator = {
     errorState: (errorMessage: string) => ({kind: StateKind.DisplayingError, errorMessage} as const),
     loadingState: () => ({kind: StateKind.LoadingConversation} as const),
-    displayingState: (messages: Array<Message>, messageToSend?: Message, loadMessagesBefore?: Uuid | null) => ({
+    displayingState: (
+        messages: Array<Message>,
+        messageToSend?: Message,
+        loadMessagesBefore?: Uuid | null,
+        usersTyping: Set<UserId> = Set(),
+    ) => ({
         kind: StateKind.DisplayingMessages,
         messages,
         messageToSend,
         loadMessagesBefore,
+        usersTyping,
     } as const),
 };
 
@@ -38,6 +45,7 @@ enum ActionKind {
     MessageSent,
     LoadOlderMessages,
     OlderMessagesLoaded,
+    UserTyping,
 }
 
 const ActionCreator = {
@@ -48,11 +56,15 @@ const ActionCreator = {
     sendMessage: (message: Message) => ({kind: ActionKind.SendMessage, message,} as const),
     loadOlderMessages: () => ({kind: ActionKind.LoadOlderMessages,} as const),
     olderMessagesLoaded: (messages: Array<Message>) => ({kind: ActionKind.OlderMessagesLoaded, messages} as const),
+    userTyping: (typing: boolean, userId?: UserId) => ({kind: ActionKind.UserTyping, userId, typing} as const),
 };
 type State = TypeFromCreator<typeof StateCreator>
 type Action = TypeFromCreator<typeof ActionCreator>
 
 const initialState: State = StateCreator.loadingState();
+
+const updateTyping = (usersTyping: Set<UserId>, id: UserId, typing: boolean) =>
+    typing ? usersTyping.add(id) : usersTyping.delete(id);
 
 // Dependencies
 let socket: SocketIOClient.Socket | null = null;
@@ -89,6 +101,10 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
                 return state.kind === StateKind.DisplayingMessages ?
                     {...state, messages: [...action.messages, ...state.messages], loadMessagesBefore: undefined} :
                     StateCreator.errorState("OlderMessagesLoaded");
+            case ActionKind.UserTyping:
+                return state.kind === StateKind.DisplayingMessages ?
+                    {...state, usersTyping: updateTyping(state.usersTyping, action.userId ?? me, action.typing)} :
+                    StateCreator.errorState("UserTyping");
         }
     };
 
@@ -100,6 +116,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             socket = io.connect("http://localhost:5000");
             socket.on("connect", () => dispatch(ActionCreator.conversationLoaded()));
             socket.on("new-message", (message: Message) => dispatch(ActionCreator.newMessage(message)));
+            socket.on("user-typing", ([id, typing]: [UserId, boolean]) => dispatch(ActionCreator.userTyping(typing, id)));
             return () => socket?.close();
         }
     );
@@ -128,15 +145,23 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             return noop; // ideally we'd like to cancel this guy.
         }
     );
+    useFeedback(
+        s => s.kind === StateKind.DisplayingMessages ? s.usersTyping.contains(me) : null,
+        amITyping => {
+            socket?.emit("user-typing", [me, amITyping]);
+            return noop;
+        }
+    );
     // UI
     const classes = useStyles();
 
-    function getMessagesUI(messages: Array<Message>) {
+    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>) {
         return (
             <div>
                 {messages.map(m => <ChatMessage key={m.id}
                                                 message={m.message}
                                                 align={m.userId === me ? 'right' : 'left'}/>)}
+                <UsersTyping usersTyping={usersTyping} me={me}/>
             </div>
         );
     }
@@ -162,9 +187,11 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             case StateKind.LoadingConversation:
                 return getLoadingUI();
             case StateKind.DisplayingMessages:
-                return getMessagesUI(state.messages);
+                return getMessagesUI(state.messages, state.usersTyping);
             case StateKind.DisplayingError:
                 return getErrorUI(state.errorMessage);
+            default:
+                safe(state);
         }
     }
 
@@ -176,6 +203,9 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
         <DispatchContext.Provider value={dispatch}>
             <Container fixed maxWidth="xs" className={clsx(classes.boxed)}>
                 <CssBaseline/>
+                <div className={clsx(classes.right)}>
+                    <h2>User ID: {me}</h2>
+                </div>
                 <Button
                     disabled={state.kind !== StateKind.DisplayingMessages || state.loadMessagesBefore != null}
                     variant="contained"
@@ -237,6 +267,17 @@ const ChatMessage: React.FC<{ message: string, align: string }> = ({message, ali
     );
 };
 
+const UsersTyping: React.FC<{ usersTyping: Set<UserId>, me: UserId }> = ({usersTyping, me}) => {
+    const classes = useStyles();
+    const usersWithoutMeTyping = usersTyping.filter((id => id !== me));
+    if (usersWithoutMeTyping.isEmpty()) return null;
+    return (
+        <div className={clsx(classes.left)}>
+            <p>Who is typing: {usersWithoutMeTyping.join(", ")}</p>
+        </div>
+    );
+};
+
 const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
 
     // UI State
@@ -250,6 +291,7 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
         const messageToSend = message.trim(); // does this shit trim in place? NO
         if (messageToSend === '') return;
         dispatch(ActionCreator.sendMessage({id: uuid(), message: messageToSend}));
+        dispatch(ActionCreator.userTyping(false));
         setMessage("");
     };
 
@@ -261,8 +303,12 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
                 id="message"
                 type='text'
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyPress = {(e) => e.key === 'Enter' ? sendMessage() : null}
+                onChange={(e) => {
+                    const text = e.target.value;
+                    setMessage(text);
+                    dispatch(ActionCreator.userTyping(text !== ""));
+                }}
+                onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : null}
                 endAdornment={
                     <InputAdornment position="end">
                         <IconButton

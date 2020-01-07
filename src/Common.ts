@@ -27,3 +27,5 @@ export const noop = () => {};
 export const Unit = Symbol("unit");
 
 export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
+
+export function safe(state: never) { throw Error(); }
