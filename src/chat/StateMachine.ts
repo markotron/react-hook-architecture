@@ -17,16 +17,17 @@ export enum StateKind {
 export class LoadingConversation { kind = StateKind.LoadingConversation as const; }
 export class DisplayingError {
     kind = StateKind.DisplayingError as const;
-    constructor(public errorMessage: string) { }
+    constructor(readonly errorMessage: string) { }
 }
 export class DisplayingMessages {
     kind = StateKind.DisplayingMessages as const;
     constructor(
-        public messages: Array<Message>,
-        public loadMessagesBefore?: Uuid | null,
-        public messageToSend?: Message,
-        public usersTyping: Set<UserId> = Set(),
-        public lastReadMessageId?: Uuid,
+        readonly messages: Array<Message>,
+        readonly loadMessagesBefore?: Uuid | null,
+        readonly messageToSend?: Message,
+        readonly messageToStar?: Message,
+        readonly usersTyping: Set<UserId> = Set(),
+        readonly lastReadMessageId?: Uuid,
     ) { }
     copy(props: Partial<DisplayingMessages>): DisplayingMessages { // should be something like PartialProperties<DisplayMessages>
         // Copying classes is hard.
@@ -40,6 +41,17 @@ export class DisplayingMessages {
         if(length === 0) return this;
         const lastReadMessage = this.messages[this.messages.length - 1];
         return this.copy({lastReadMessageId: lastReadMessage.id})
+    }
+    messageStarred(): DisplayingMessages {
+        const messageToStar = this.messageToStar;
+        if(messageToStar === undefined) return this;
+        const message = {...messageToStar, isStarred: !messageToStar.isStarred};
+        const messageToStarId = message.id;
+        const messageToStarIndex = this.messages.findIndex((m) => m.id === messageToStarId);
+        const beforeMessageToStar = this.messages.slice(0, messageToStarIndex);
+        const afterMessageToStar = this.messages.slice(messageToStarIndex + 1, this.messages.length);
+        const newMessages = [...beforeMessageToStar, message, ...afterMessageToStar];
+        return this.copy({messages: newMessages, messageToStar: undefined});
     }
 }
 
@@ -60,6 +72,8 @@ export enum ActionKind {
     UserTyping = "UserTyping",
     AllMessagesRead = "LastMessageRead",
     LastMessageReadFetched = "LastMessageReadFetched",
+    StarMessage = "StarMessage",
+    MessageStarred = "MessageStarred",
 }
 
 export class ErrorOccurred {
@@ -91,10 +105,15 @@ export class LastMessageReadFetched {
     kind = ActionKind.LastMessageReadFetched as const;
     constructor(readonly messageId: Uuid) { }
 }
+export class StarMessage {
+    kind = ActionKind.StarMessage as const;
+    constructor(readonly message: Message) { }
+}
+export class MessageStarred { kind = ActionKind.MessageStarred as const; }
 
 export type Action = ErrorOccurred | ConversationLoaded | MessageSent | NewMessage |
     SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping |
-    AllMessagesRead | LastMessageReadFetched
+    AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred
 
 // @formatter:on
 /**
@@ -130,7 +149,11 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
         case ActionKind.AllMessagesRead:
             return assertAndDo((s) => s.updateLastMessageRead());
         case ActionKind.LastMessageReadFetched:
-            return assertAndCopy((s) => ({lastReadMessageId: action.messageId}));
+            return assertAndCopy(_ => ({lastReadMessageId: action.messageId}));
+        case ActionKind.MessageStarred:
+            return assertAndDo((s) => s.messageStarred());
+        case ActionKind.StarMessage:
+            return assertAndCopy(_ => ({messageToStar: action.message}));
         default:
             assertNever(action);
     }
@@ -138,11 +161,11 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
 
 // Feedback dependencies
 let socket: SocketIOClient.Socket | null = null;
-
 /**
  * Feedbacks
  */
 export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action>) => {
+
     const useFeedback = feedbackFactory(state);
     useFeedback(
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
@@ -170,8 +193,8 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
             return s.loadMessagesBefore
         },
         uuid => {
-            const root = `http://localhost:5000/messages`;
-            const suff = uuid === Unit ? "" : `?uuid=${uuid}`;
+            const root = `http://localhost:5000/messages?userId=${me}`;
+            const suff = uuid === Unit ? "" : `&uuid=${uuid}`;
             fetch(root + suff)
             .then((res) => res.json())
             .then((res) => dispatch(new OlderMessagesLoaded(res)))
@@ -189,16 +212,26 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
     useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? s.lastReadMessageId : null,
         lastReadMessageId => {
-            if(lastReadMessageId === undefined) {
+            if (lastReadMessageId === undefined) {
                 const url = `http://localhost:5000/messages/lastRead?userId=${me}`;
                 fetch(url)
-                    .then((res) => res.json())
-                    .then((res) => { if(res !== "null") dispatch(new LastMessageReadFetched(res.toString())); })
-                    .catch((reason) => dispatch(new ErrorOccurred(reason.toString())));
+                .then((res) => res.json())
+                .then((res) => {
+                    if (res !== "null") dispatch(new LastMessageReadFetched(res.toString()));
+                })
+                .catch((reason) => dispatch(new ErrorOccurred(reason.toString())));
             } else {
                 socket?.emit("message-read", {userId: me, messageId: lastReadMessageId});
             }
             return noop;
         }
     );
+    useFeedback(
+        s => s.kind === StateKind.DisplayingMessages ? s.messageToStar ?? null : null,
+        messageToStar => {
+            socket?.emit("message-starred", {userId: me, messageIdToStar: messageToStar.id});
+            dispatch(new MessageStarred());
+            return noop
+        }
+    )
 };

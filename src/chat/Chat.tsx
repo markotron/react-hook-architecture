@@ -19,7 +19,7 @@ import {
     initialState,
     LoadOlderMessages,
     reducerWithProps,
-    SendMessage,
+    SendMessage, StarMessage,
     State,
     StateKind,
     useFeedbacks,
@@ -37,11 +37,12 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     // UI
     const classes = useStyles();
 
-    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>, lastReadMessageId?: Uuid) {
+    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>, lastReadMessageId?: Uuid, canStar = false) {
         const listOfMessages = (msgs: Array<Message>, areNew: boolean = false) =>
             msgs.map(m => <ChatMessage key={m.id}
-                                       message={m.message}
+                                       message={m}
                                        isNew={areNew && m.userId !== me}
+                                       canStar={canStar}
                                        align={m.userId === me ? 'right' : 'left'}/>);
         const lastReadMessageSliceIndex = messages.findIndex((m) => m.id === lastReadMessageId) + 1;
         const readMessages = messages.slice(0, lastReadMessageSliceIndex);
@@ -58,7 +59,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     function getErrorUI(message: string) {
         return (
             <React.Fragment>
-                <ChatMessage message={message} align='left' isNew={false}/>
+                <p>Message</p>
             </React.Fragment>
         )
     }
@@ -66,7 +67,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     function getLoadingUI() {
         return (
             <React.Fragment>
-                <ChatMessage message='Loading...' align='left' isNew={false}/>
+                <p>Loading...</p>
             </React.Fragment>
         )
     }
@@ -76,7 +77,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             case StateKind.LoadingConversation:
                 return getLoadingUI();
             case StateKind.DisplayingMessages:
-                return getMessagesUI(state.messages, state.usersTyping, state.lastReadMessageId);
+                return getMessagesUI(state.messages, state.usersTyping, state.lastReadMessageId, state.messageToSend === undefined);
             case StateKind.DisplayingError:
                 return getErrorUI(state.errorMessage);
             default:
@@ -90,7 +91,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
 
     return (
         <DispatchContext.Provider value={dispatch}>
-            <Container fixed maxWidth="xs" className={clsx(classes.boxed)}>
+            <Container fixed maxWidth="md" className={clsx(classes.boxed)}>
                 <CssBaseline/>
                 <div className={clsx(classes.right)}>
                     <h2>User ID: {me}</h2>
@@ -146,15 +147,20 @@ const useStyles = makeStyles(theme => ({
     },
 }));
 
-const ChatMessage: React.FC<{ message: string, isNew: boolean, align: string }> = ({message, isNew = true, align}) => {
+const ChatMessage: React.FC<{ message: Message, isNew: boolean, align: string, canStar: boolean }> = ({message, isNew = true, align, canStar}) => {
     const classes = useStyles();
     const applyClasses = () => align === 'left' ? clsx(classes.messageBox, classes.left) : clsx(classes.messageBox, classes.right);
+    const dispatch = useContext(DispatchContext);
     return (
         <div className={applyClasses()}>
-            <ChatBubble color={isNew ? "primary" : "action"}/>
-            <span className={clsx(classes.message)}>{message}</span>
-            <IconButton>
-                <Star color="action"/>
+            {align === 'left' && isNew && <IconButton disabled={true}>
+                <ChatBubble visibility={0} color="primary"/>
+            </IconButton>}
+            <span className={clsx(classes.message)}>{message.message}</span>
+            <IconButton
+                disabled={!canStar}
+                onClick={_ => dispatch(new StarMessage(message))}>
+                <Star color={message.isStarred ? "primary" : "action"}/>
             </IconButton>
         </div>
     );
@@ -201,8 +207,8 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
                     const text = e.target.value;
                     setMessage(text);
                     dispatch(new UserTyping(text !== ""));
-                    dispatch(new AllMessagesRead());
                 }}
+                onFocus={_ => dispatch(new AllMessagesRead())}
                 onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : null}
                 endAdornment={
                     <InputAdornment position="end">

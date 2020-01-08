@@ -3,11 +3,15 @@ import './App.css';
 import {Chat} from "./chat/Chat";
 
 function randUser() {
-    return Math.round(Math.random() * 10000);
+    return Math.round(Math.random() * 2);
 }
 
 function App() {
-    return <Chat me={randUser()}/>
+    return (
+        <div>
+            <Chat me={randUser()}/>
+        </div>
+    )
 }
 
 export default App;
