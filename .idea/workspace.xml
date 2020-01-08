@@ -4,6 +4,7 @@
     <list default="true" id="729520b8-d983-481a-8a84-8506637bf89b" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/chat/Chat.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/Chat.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chat/Model.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/Model.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/chat/StateMachine.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/StateMachine.ts" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -82,6 +83,7 @@
       <option name="presentableId" value="Default" />
       <updated>1577467455710</updated>
       <workItem from="1577467457486" duration="20413000" />
+      <workItem from="1578485438635" duration="8866000" />
     </task>
     <servers />
   </component>
@@ -93,7 +95,9 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="COLUMN_ORDER" />
+            </State>
           </value>
         </entry>
       </map>

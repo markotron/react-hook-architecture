@@ -26,6 +26,7 @@ export class DisplayingMessages {
         public loadMessagesBefore?: Uuid | null,
         public messageToSend?: Message,
         public usersTyping: Set<UserId> = Set(),
+        public lastReadMessageId?: Uuid,
     ) { }
     copy(props: Partial<DisplayingMessages>): DisplayingMessages { // should be something like PartialProperties<DisplayMessages>
         // Copying classes is hard.
@@ -33,6 +34,12 @@ export class DisplayingMessages {
     }
     updateTyping(id: UserId, isTyping: boolean): DisplayingMessages {
         return this.copy({usersTyping: isTyping ? this.usersTyping.add(id) : this.usersTyping.remove(id)});
+    }
+    updateLastMessageRead(): DisplayingMessages {
+        const length = this.messages.length;
+        if(length === 0) return this;
+        const lastReadMessage = this.messages[this.messages.length - 1];
+        return this.copy({lastReadMessageId: lastReadMessage.id})
     }
 }
 
@@ -51,35 +58,43 @@ export enum ActionKind {
     LoadOlderMessages = "LoadOlderMessages",
     OlderMessagesLoaded = "OlderMessagesLoaded",
     UserTyping = "UserTyping",
+    AllMessagesRead = "LastMessageRead",
+    LastMessageReadFetched = "LastMessageReadFetched",
 }
 
-export class ErrorOccured {
+export class ErrorOccurred {
     // `as const` is important because it ensures that the type is ErrorOccurred instead of ActionKind
-    kind = ActionKind.ErrorOccurred as const;
-    constructor(public errorMessage: string) { }
+    readonly kind = ActionKind.ErrorOccurred as const;
+    constructor(readonly errorMessage: string) { }
 }
 export class ConversationLoaded { kind = ActionKind.ConversationLoaded as const; }
 export class MessageSent { kind = ActionKind.MessageSent as const; }
 export class NewMessage {
     kind = ActionKind.NewMessage as const;
-    constructor(public message: Message) { }
+    constructor(readonly message: Message) { }
 }
 export class SendMessage {
     kind = ActionKind.SendMessage as const;
-    constructor(public message: Message) { }
+    constructor(readonly message: Message) { }
 }
 export class LoadOlderMessages { kind = ActionKind.LoadOlderMessages as const; }
 export class OlderMessagesLoaded {
     kind = ActionKind.OlderMessagesLoaded as const;
-    constructor(public messages: Array<Message>) { }
+    constructor(readonly messages: Array<Message>) { }
 }
 export class UserTyping {
     kind = ActionKind.UserTyping as const;
-    constructor(public isTyping: boolean, public userId?: UserId) { }
+    constructor(readonly isTyping: boolean, readonly userId?: UserId) { }
+}
+export class AllMessagesRead { kind = ActionKind.AllMessagesRead as const; }
+export class LastMessageReadFetched {
+    kind = ActionKind.LastMessageReadFetched as const;
+    constructor(readonly messageId: Uuid) { }
 }
 
-export type Action = ErrorOccured | ConversationLoaded | MessageSent | NewMessage |
-    SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping
+export type Action = ErrorOccurred | ConversationLoaded | MessageSent | NewMessage |
+    SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping |
+    AllMessagesRead | LastMessageReadFetched
 
 // @formatter:on
 /**
@@ -95,15 +110,15 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
     switch (action.kind) {
         case ActionKind.ErrorOccurred:
             return new DisplayingError(action.errorMessage);
+        case ActionKind.ConversationLoaded:
+            return state.kind === StateKind.LoadingConversation ?
+                new DisplayingMessages([], null) : unsupportedAction(state, action);
         case ActionKind.MessageSent:
             return assertAndCopy(_ => ({messageToSend: undefined}));
         case ActionKind.NewMessage:
             return assertAndCopy((s) => ({messages: [...s.messages, action.message]}));
         case ActionKind.SendMessage:
             return assertAndCopy(_ => ({messageToSend: {...action.message, userId: me}}));
-        case ActionKind.ConversationLoaded:
-            return state.kind === StateKind.LoadingConversation ?
-                new DisplayingMessages([], null) : unsupportedAction(state, action);
         case ActionKind.LoadOlderMessages:
             return assertAndCopy((s) => ({loadMessagesBefore: s.messages[0]?.id}));
         case ActionKind.OlderMessagesLoaded:
@@ -112,12 +127,16 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
             }));
         case ActionKind.UserTyping:
             return assertAndDo((s) => s.updateTyping(action.userId ?? me, action.isTyping));
+        case ActionKind.AllMessagesRead:
+            return assertAndDo((s) => s.updateLastMessageRead());
+        case ActionKind.LastMessageReadFetched:
+            return assertAndCopy((s) => ({lastReadMessageId: action.messageId}));
         default:
             assertNever(action);
     }
 };
 
-// Dependencies
+// Feedback dependencies
 let socket: SocketIOClient.Socket | null = null;
 
 /**
@@ -156,7 +175,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
             fetch(root + suff)
             .then((res) => res.json())
             .then((res) => dispatch(new OlderMessagesLoaded(res)))
-            .catch((reason) => dispatch(new ErrorOccured(reason)));
+            .catch((reason) => dispatch(new ErrorOccurred(reason)));
             return noop; // ideally we'd like to cancel this guy.
         }
     );
@@ -164,6 +183,21 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         s => s.kind === StateKind.DisplayingMessages ? s.usersTyping.contains(me) : null,
         amITyping => {
             socket?.emit("user-typing", [me, amITyping]);
+            return noop;
+        }
+    );
+    useFeedback(
+        s => s.kind === StateKind.DisplayingMessages ? s.lastReadMessageId : null,
+        lastReadMessageId => {
+            if(lastReadMessageId === undefined) {
+                const url = `http://localhost:5000/messages/lastRead?userId=${me}`;
+                fetch(url)
+                    .then((res) => res.json())
+                    .then((res) => { if(res !== "null") dispatch(new LastMessageReadFetched(res.toString())); })
+                    .catch((reason) => dispatch(new ErrorOccurred(reason.toString())));
+            } else {
+                socket?.emit("message-read", {userId: me, messageId: lastReadMessageId});
+            }
             return noop;
         }
     );

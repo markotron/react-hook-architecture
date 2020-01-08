@@ -5,4 +5,5 @@ export interface Message {
     id: Uuid;
     userId?: UserId;
     message: string;
+    isStarred: boolean
 }

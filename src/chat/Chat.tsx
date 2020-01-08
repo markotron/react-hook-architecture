@@ -11,11 +11,11 @@ import IconButton from "@material-ui/core/IconButton";
 import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
 import {assertNever, getDispatchContext} from "../Common"
-import {Message, UserId} from "./Model";
+import {Message, UserId, Uuid} from "./Model";
 import React, {useContext, useReducer, useState} from 'react';
 import {Set} from "immutable";
 import {
-    Action,
+    Action, AllMessagesRead,
     initialState,
     LoadOlderMessages,
     reducerWithProps,
@@ -25,6 +25,7 @@ import {
     useFeedbacks,
     UserTyping
 } from "./StateMachine";
+import {ChatBubble, Star} from "@material-ui/icons";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -36,12 +37,19 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     // UI
     const classes = useStyles();
 
-    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>) {
+    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>, lastReadMessageId?: Uuid) {
+        const listOfMessages = (msgs: Array<Message>, areNew: boolean = false) =>
+            msgs.map(m => <ChatMessage key={m.id}
+                                       message={m.message}
+                                       isNew={areNew && m.userId !== me}
+                                       align={m.userId === me ? 'right' : 'left'}/>);
+        const lastReadMessageSliceIndex = messages.findIndex((m) => m.id === lastReadMessageId) + 1;
+        const readMessages = messages.slice(0, lastReadMessageSliceIndex);
+        const unreadMessages = messages.slice(lastReadMessageSliceIndex, messages.length);
         return (
             <div>
-                {messages.map(m => <ChatMessage key={m.id}
-                                                message={m.message}
-                                                align={m.userId === me ? 'right' : 'left'}/>)}
+                {listOfMessages(readMessages)}
+                {listOfMessages(unreadMessages, true)}
                 <UsersTyping usersTyping={usersTyping} me={me}/>
             </div>
         );
@@ -50,7 +58,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     function getErrorUI(message: string) {
         return (
             <React.Fragment>
-                <ChatMessage message={message} align='left'/>
+                <ChatMessage message={message} align='left' isNew={false}/>
             </React.Fragment>
         )
     }
@@ -58,7 +66,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     function getLoadingUI() {
         return (
             <React.Fragment>
-                <ChatMessage message='Loading...' align='left'/>
+                <ChatMessage message='Loading...' align='left' isNew={false}/>
             </React.Fragment>
         )
     }
@@ -68,7 +76,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             case StateKind.LoadingConversation:
                 return getLoadingUI();
             case StateKind.DisplayingMessages:
-                return getMessagesUI(state.messages, state.usersTyping);
+                return getMessagesUI(state.messages, state.usersTyping, state.lastReadMessageId);
             case StateKind.DisplayingError:
                 return getErrorUI(state.errorMessage);
             default:
@@ -138,12 +146,16 @@ const useStyles = makeStyles(theme => ({
     },
 }));
 
-const ChatMessage: React.FC<{ message: string, align: string }> = ({message, align}) => {
+const ChatMessage: React.FC<{ message: string, isNew: boolean, align: string }> = ({message, isNew = true, align}) => {
     const classes = useStyles();
     const applyClasses = () => align === 'left' ? clsx(classes.messageBox, classes.left) : clsx(classes.messageBox, classes.right);
     return (
         <div className={applyClasses()}>
+            <ChatBubble color={isNew ? "primary" : "action"}/>
             <span className={clsx(classes.message)}>{message}</span>
+            <IconButton>
+                <Star color="action"/>
+            </IconButton>
         </div>
     );
 };
@@ -171,8 +183,9 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
     const sendMessage = () => {
         const messageToSend = message.trim(); // does this shit trim in place? NO
         if (messageToSend === '') return;
-        dispatch(new SendMessage({id: uuid(), message: messageToSend}));
+        dispatch(new SendMessage({id: uuid(), message: messageToSend, isStarred: false}));
         dispatch(new UserTyping(false));
+        dispatch(new AllMessagesRead());
         setMessage("");
     };
 
@@ -188,6 +201,7 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
                     const text = e.target.value;
                     setMessage(text);
                     dispatch(new UserTyping(text !== ""));
+                    dispatch(new AllMessagesRead());
                 }}
                 onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : null}
                 endAdornment={
