@@ -2,7 +2,8 @@ import {Message, UserId, Uuid} from "./Model";
 import {Set} from "immutable";
 import {Dispatch, Reducer} from "react";
 import {assertNever, feedbackFactory, noop, Unit, unsupportedAction} from "../Common";
-import * as io from "socket.io-client";
+import messagingService from "./MessagingService";
+import {Subscription} from "rxjs";
 
 // @formatter:off
 /**
@@ -159,8 +160,6 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
     }
 };
 
-// Feedback dependencies
-let socket: SocketIOClient.Socket | null = null;
 /**
  * Feedbacks
  */
@@ -170,17 +169,17 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
     useFeedback(
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
         _ => {
-            socket = io.connect("http://localhost:5000");
-            socket.on("connect", () => dispatch(new ConversationLoaded()));
-            socket.on("new-message", (message: Message) => dispatch(new NewMessage(message)));
-            socket.on("user-typing", ([id, isTyping]: [UserId, boolean]) => dispatch(new UserTyping(isTyping, id)));
-            return () => socket?.close();
+            messagingService.connect();
+            messagingService.onConnect(() => dispatch(new ConversationLoaded()));
+            messagingService.onNewMessage((message: Message) => dispatch(new NewMessage(message)));
+            messagingService.onUserTyping((userId, isTyping) => dispatch(new UserTyping(isTyping, userId)));
+            return () => messagingService.disconnect()
         }
     );
     useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
         message => {
-            socket?.emit("new-message", message);
+            messagingService.sendMessage(message);
             dispatch(new MessageSent());
             return noop;
         }
@@ -189,49 +188,49 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         s => {
             if (s.kind !== StateKind.DisplayingMessages) return null;
             if (s.loadMessagesBefore === undefined) return null;
-            if (s.loadMessagesBefore === null) return Unit;
-            return s.loadMessagesBefore
+            if (s.loadMessagesBefore === null) return undefined;
+            return s.loadMessagesBefore;
         },
         uuid => {
-            const root = `http://localhost:5000/messages?userId=${me}`;
-            const suff = uuid === Unit ? "" : `&uuid=${uuid}`;
-            fetch(root + suff)
-            .then((res) => res.json())
-            .then((res) => dispatch(new OlderMessagesLoaded(res)))
-            .catch((reason) => dispatch(new ErrorOccurred(reason)));
-            return noop; // ideally we'd like to cancel this guy.
+            const subscription = messagingService
+                .fetchMessagesBefore(me, uuid)
+                .subscribe(
+                    (messages: Array<Message>) => dispatch(new OlderMessagesLoaded(messages)),
+                    (reason: any) => dispatch(new ErrorOccurred(reason))
+                );
+            return () => subscription.unsubscribe();
         }
     );
     useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? s.usersTyping.contains(me) : null,
         amITyping => {
-            socket?.emit("user-typing", [me, amITyping]);
+            messagingService.sendUserTyping(me, amITyping);
             return noop;
         }
     );
     useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? s.lastReadMessageId : null,
         lastReadMessageId => {
+            let subscription: Subscription | null = null;
             if (lastReadMessageId === undefined) {
-                const url = `http://localhost:5000/messages/lastRead?userId=${me}`;
-                fetch(url)
-                .then((res) => res.json())
-                .then((res) => {
-                    if (res !== "null") dispatch(new LastMessageReadFetched(res.toString()));
-                })
-                .catch((reason) => dispatch(new ErrorOccurred(reason.toString())));
+                subscription = messagingService
+                    .fetchLastReadMessage(me)
+                    .subscribe(
+                        (uuid: Uuid) => uuid !== null && dispatch(new LastMessageReadFetched(uuid.toString())),
+                        (reason: any) => dispatch(new ErrorOccurred(reason.toString()))
+                    );
             } else {
-                socket?.emit("message-read", {userId: me, messageId: lastReadMessageId});
+                messagingService.markMessagesAsRead(me, lastReadMessageId);
             }
-            return noop;
+            return () => subscription?.unsubscribe();
         }
     );
     useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? s.messageToStar ?? null : null,
         messageToStar => {
-            socket?.emit("message-starred", {userId: me, messageIdToStar: messageToStar.id});
+            messagingService.markMessageAsStarred(me, messageToStar.id);
             dispatch(new MessageStarred());
             return noop
         }
-    )
+    );
 };

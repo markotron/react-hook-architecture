@@ -10,7 +10,7 @@ import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
-import {assertNever, getDispatchContext} from "../Common"
+import {assertNever, getDispatchContext, Unit} from "../Common"
 import {Message, UserId, Uuid} from "./Model";
 import React, {useContext, useReducer, useState} from 'react';
 import {Set} from "immutable";
@@ -26,6 +26,8 @@ import {
     UserTyping
 } from "./StateMachine";
 import {ChatBubble, Star} from "@material-ui/icons";
+import {Subject} from "rxjs";
+import {debounce, debounceTime} from "rxjs/operators";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -179,6 +181,8 @@ const UsersTyping: React.FC<{ usersTyping: Set<UserId>, me: UserId }> = ({usersT
 
 const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
 
+    const keyPressSubject = new Subject();
+
     // UI State
     const [message, setMessage] = useState("");
     const classes = useStyles();
@@ -194,6 +198,9 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
         dispatch(new AllMessagesRead());
         setMessage("");
     };
+    keyPressSubject
+        .pipe(debounceTime(5000))
+        .subscribe(_ => dispatch(new UserTyping(false)));
 
     return (
         <FormControl className={clsx(classes.marginBottom, classes.textField)}>
@@ -209,7 +216,7 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
                     dispatch(new UserTyping(text !== ""));
                 }}
                 onFocus={_ => dispatch(new AllMessagesRead())}
-                onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : null}
+                onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : keyPressSubject.next(Unit)}
                 endAdornment={
                     <InputAdornment position="end">
                         <IconButton
