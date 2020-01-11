@@ -12,8 +12,9 @@ export const feedbackFactory: FeedbackFactory = <State>(state: State) => {
         useEffect(() => {
             if (q === null) return;
             return effect(q)
+            // https://reactjs.org/docs/hooks-faq.html#is-it-safe-to-omit-functions-from-the-list-of-dependencies
             // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [q])
+        }, [JSON.stringify(q)]) // the comparison works by reference, that's why I'm stringifying it.
     }
 };
 
@@ -32,9 +33,5 @@ export const Unit = Symbol("unit");
 export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
 
 export function assertNever(state: never): never { throw Error(); }
-
-/**
- * RxJS helpers
- */
 
 

@@ -1,8 +1,8 @@
-import {Message, UserId, Uuid} from "./Model";
+import {Message, UserId, Uuid} from "../model/Model";
 import * as io from "socket.io-client";
 import Axios from "axios-observable"
-import {map, retry} from "rxjs/operators";
-import {Observable} from "rxjs";
+import {map, retry, retryWhen} from "rxjs/operators";
+import {Observable, Subject} from "rxjs";
 
 interface MessagingService {
 
@@ -30,17 +30,35 @@ interface MessagingService {
     /**
      * REST API methods
      */
-    fetchMessagesBefore(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>>
+    fetchMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>>
 
     fetchLastReadMessage(userId: UserId): Observable<Uuid>
+
+    fetchStarredMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>>
+
+    /**
+     * Observables
+     */
+    observeFavorites(): Observable<Message>
+
+    newFavorite(message: Message): void
 }
 
 class MessagingServiceImpl implements MessagingService {
     private socket: SocketIOClient.Socket | null = null;
+    private favorites = new Subject<Message>();
 
     private readonly baseUrl = "http://localhost:5000/";
 
-    fetchLastReadMessage(userId: number): Observable<Uuid> {
+    newFavorite(message: Message): void {
+        this.favorites.next(message);
+    }
+
+    observeFavorites(): Observable<Message> {
+        return this.favorites;
+    }
+
+    fetchLastReadMessage(userId: UserId): Observable<Uuid> {
         const url = `${this.baseUrl}messages/lastRead?userId=${userId}`;
         return Axios
             .get(url)
@@ -50,7 +68,7 @@ class MessagingServiceImpl implements MessagingService {
             );
     }
 
-    fetchMessagesBefore(userId: number, beforeMessageId?: string): Observable<Array<Message>> {
+    fetchMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>> {
         const root = `${this.baseUrl}messages?userId=${userId}`;
         const suffix = beforeMessageId ? `&uuid=${beforeMessageId}` : "";
         return Axios
@@ -61,11 +79,23 @@ class MessagingServiceImpl implements MessagingService {
             );
     }
 
-    markMessageAsStarred(userId: number, messageId: string): void {
+    fetchStarredMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>> {
+        const root = `${this.baseUrl}messages/starred?userId=${userId}`;
+        const suffix = beforeMessageId ? `&beforeId=${beforeMessageId}` : "";
+        return Axios
+            .get(root + suffix)
+            .pipe(
+                retry(3),
+                map((response) => response.data)
+            );
+
+    }
+
+    markMessageAsStarred(userId: UserId, messageId: Uuid): void {
         this.emitOrThrow("message-starred", {userId: userId, messageIdToStar: messageId});
     }
 
-    markMessagesAsRead(userId: number, lastReadMessageId: string): void {
+    markMessagesAsRead(userId: UserId, lastReadMessageId: Uuid): void {
         this.emitOrThrow("message-read", {userId: userId, messageId: lastReadMessageId});
     }
 
@@ -93,7 +123,7 @@ class MessagingServiceImpl implements MessagingService {
         this.emitOrThrow("new-message", message);
     }
 
-    sendUserTyping(userId: number, isTyping: boolean): void {
+    sendUserTyping(userId: UserId, isTyping: boolean): void {
         this.emitOrThrow("user-typing", [userId, isTyping]);
     }
 

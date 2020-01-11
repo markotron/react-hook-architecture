@@ -11,8 +11,8 @@ import IconButton from "@material-ui/core/IconButton";
 import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
 import {assertNever, getDispatchContext, Unit} from "../Common"
-import {Message, UserId, Uuid} from "./Model";
-import React, {useContext, useReducer, useState} from 'react';
+import {Message, UserId, Uuid} from "../model/Model";
+import React, {useContext, useEffect, useReducer, useState} from 'react';
 import {Set} from "immutable";
 import {
     Action, AllMessagesRead,
@@ -27,7 +27,7 @@ import {
 } from "./StateMachine";
 import {ChatBubble, Star} from "@material-ui/icons";
 import {Subject} from "rxjs";
-import {debounce, debounceTime} from "rxjs/operators";
+import {debounceTime} from "rxjs/operators";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -179,9 +179,8 @@ const UsersTyping: React.FC<{ usersTyping: Set<UserId>, me: UserId }> = ({usersT
     );
 };
 
+const keyPressSubject = new Subject();
 const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
-
-    const keyPressSubject = new Subject();
 
     // UI State
     const [message, setMessage] = useState("");
@@ -198,9 +197,14 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
         dispatch(new AllMessagesRead());
         setMessage("");
     };
-    keyPressSubject
-        .pipe(debounceTime(5000))
-        .subscribe(_ => dispatch(new UserTyping(false)));
+    useEffect(() => {
+            const subscription = keyPressSubject
+                .pipe(debounceTime(5000))
+                .subscribe(_ => dispatch(new UserTyping(false)));
+            return () => subscription.unsubscribe();
+        },
+        []
+    );
 
     return (
         <FormControl className={clsx(classes.marginBottom, classes.textField)}>

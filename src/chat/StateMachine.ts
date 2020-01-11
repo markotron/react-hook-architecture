@@ -1,8 +1,8 @@
-import {Message, UserId, Uuid} from "./Model";
+import {Message, UserId, Uuid} from "../model/Model";
 import {Set} from "immutable";
 import {Dispatch, Reducer} from "react";
 import {assertNever, feedbackFactory, noop, Unit, unsupportedAction} from "../Common";
-import messagingService from "./MessagingService";
+import messagingService from "../service/MessagingService";
 import {Subscription} from "rxjs";
 
 // @formatter:off
@@ -12,7 +12,7 @@ import {Subscription} from "rxjs";
 export enum StateKind {
     LoadingConversation = "LoadingConversation",
     DisplayingMessages = "DisplayingMessages",
-    DisplayingError = "DisplayingError"
+    DisplayingError = "DisplayingError",
 }
 
 export class LoadingConversation { kind = StateKind.LoadingConversation as const; }
@@ -30,30 +30,6 @@ export class DisplayingMessages {
         readonly usersTyping: Set<UserId> = Set(),
         readonly lastReadMessageId?: Uuid,
     ) { }
-    copy(props: Partial<DisplayingMessages>): DisplayingMessages { // should be something like PartialProperties<DisplayMessages>
-        // Copying classes is hard.
-        return Object.assign(Object.create(Object.getPrototypeOf(this)), {...this, ...props});
-    }
-    updateTyping(id: UserId, isTyping: boolean): DisplayingMessages {
-        return this.copy({usersTyping: isTyping ? this.usersTyping.add(id) : this.usersTyping.remove(id)});
-    }
-    updateLastMessageRead(): DisplayingMessages {
-        const length = this.messages.length;
-        if(length === 0) return this;
-        const lastReadMessage = this.messages[this.messages.length - 1];
-        return this.copy({lastReadMessageId: lastReadMessage.id})
-    }
-    messageStarred(): DisplayingMessages {
-        const messageToStar = this.messageToStar;
-        if(messageToStar === undefined) return this;
-        const message = {...messageToStar, isStarred: !messageToStar.isStarred};
-        const messageToStarId = message.id;
-        const messageToStarIndex = this.messages.findIndex((m) => m.id === messageToStarId);
-        const beforeMessageToStar = this.messages.slice(0, messageToStarIndex);
-        const afterMessageToStar = this.messages.slice(messageToStarIndex + 1, this.messages.length);
-        const newMessages = [...beforeMessageToStar, message, ...afterMessageToStar];
-        return this.copy({messages: newMessages, messageToStar: undefined});
-    }
 }
 
 export type State = LoadingConversation | DisplayingError | DisplayingMessages
@@ -193,7 +169,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         },
         uuid => {
             const subscription = messagingService
-                .fetchMessagesBefore(me, uuid)
+                .fetchMessages(me, uuid)
                 .subscribe(
                     (messages: Array<Message>) => dispatch(new OlderMessagesLoaded(messages)),
                     (reason: any) => dispatch(new ErrorOccurred(reason))
@@ -229,8 +205,45 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         s => s.kind === StateKind.DisplayingMessages ? s.messageToStar ?? null : null,
         messageToStar => {
             messagingService.markMessageAsStarred(me, messageToStar.id);
+            messagingService.newFavorite({...messageToStar, isStarred: !messageToStar.isStarred});
             dispatch(new MessageStarred());
             return noop
         }
     );
+};
+
+/**
+ * Extensions
+ */
+declare module "./StateMachine" {
+    interface DisplayingMessages {
+        copy: (props: Partial<DisplayingMessages>) => DisplayingMessages
+        updateTyping: (id: UserId, isTyping: boolean) => DisplayingMessages
+        updateLastMessageRead: () => DisplayingMessages
+        messageStarred: () => DisplayingMessages
+    }
+}
+DisplayingMessages.prototype.copy = function(props) { // should be something like PartialProperties<DisplayMessages>
+    // Copying classes is hard.
+    return Object.assign(Object.create(Object.getPrototypeOf(this)), {...this, ...props});
+};
+DisplayingMessages.prototype.updateTyping = function(id, isTyping) {
+    return this.copy({usersTyping: isTyping ? this.usersTyping.add(id) : this.usersTyping.remove(id)});
+};
+DisplayingMessages.prototype.updateLastMessageRead = function() {
+    const length = this.messages.length;
+    if(length === 0) return this;
+    const lastReadMessage = this.messages[this.messages.length - 1];
+    return this.copy({lastReadMessageId: lastReadMessage.id})
+};
+DisplayingMessages.prototype.messageStarred = function() {
+    const messageToStar = this.messageToStar;
+    if(messageToStar === undefined) return this;
+    const message = {...messageToStar, isStarred: !messageToStar.isStarred} as Message;
+    const messageToStarId = message.id;
+    const messageToStarIndex = this.messages.findIndex((m) => m.id === messageToStarId);
+    const beforeMessageToStar = this.messages.slice(0, messageToStarIndex);
+    const afterMessageToStar = this.messages.slice(messageToStarIndex + 1, this.messages.length);
+    const newMessages = [...beforeMessageToStar, message, ...afterMessageToStar];
+    return this.copy({messages: newMessages, messageToStar: undefined});
 };
