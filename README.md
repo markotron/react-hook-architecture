@@ -1,3 +1,8 @@
+## How to run? 
+
+* Run the [simple-chat-backend](https://github.com/markotron/simple-chat-backend). 
+* In the root of this repo run `npm start`. 
+
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
 ## Available Scripts
