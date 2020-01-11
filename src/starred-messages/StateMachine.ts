@@ -37,8 +37,6 @@ export type Action = LoadOlderMessages | OlderMessagesLoaded | ErrorOccurred | N
 // @formatter:on
 
 export const reducerWithProps: Reducer<State, Action> = (state, action) => {
-    console.log(JSON.stringify(state));
-    console.log(JSON.stringify(action));
     switch (action.kind) {
         case ActionKind.NewFavorite:
             return state.toggleFavorite(action.message);

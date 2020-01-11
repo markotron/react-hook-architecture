@@ -25,7 +25,7 @@ import {
     useFeedbacks,
     UserTyping
 } from "./StateMachine";
-import {ChatBubble, Star} from "@material-ui/icons";
+import {Autorenew, ChatBubble, Star} from "@material-ui/icons";
 import {Subject} from "rxjs";
 import {debounceTime} from "rxjs/operators";
 
@@ -98,12 +98,11 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
                 <div className={clsx(classes.right)}>
                     <h2>User ID: {me}</h2>
                 </div>
-                <Button
+                <IconButton
                     disabled={state.kind !== StateKind.DisplayingMessages || state.loadMessagesBefore != null}
-                    variant="contained"
-                    onClick={() => dispatch(new LoadOlderMessages())}>
-                    Load more
-                </Button>
+                    onClick = {_ => dispatch(new LoadOlderMessages())}>
+                    <Autorenew />
+                </IconButton>
                 {content(state)}
                 <ChatInput enabled={isMessageToSend(state)}/>
             </Container>

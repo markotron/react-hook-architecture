@@ -2,15 +2,10 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="729520b8-d983-481a-8a84-8506637bf89b" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/starred-messages/StarredMessages.tsx" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/starred-messages/StateMachine.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Common.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/Common.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/chat/Chat.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/Chat.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/chat/MessagingService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/MessagingService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/chat/Model.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/model/Model.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/chat/StateMachine.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/StateMachine.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/starred-messages/StarredMessages.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/starred-messages/StarredMessages.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/starred-messages/StateMachine.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/starred-messages/StateMachine.ts" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -95,7 +90,7 @@
       <option name="presentableId" value="Default" />
       <updated>1577467455710</updated>
       <workItem from="1577467457486" duration="20413000" />
-      <workItem from="1578485438635" duration="44207000" />
+      <workItem from="1578485438635" duration="44670000" />
     </task>
     <servers />
   </component>

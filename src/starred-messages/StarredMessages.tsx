@@ -10,6 +10,8 @@ import TableCell from "@material-ui/core/TableCell";
 import makeStyles from "@material-ui/core/styles/makeStyles";
 import Container from "@material-ui/core/Container";
 import TableHead from "@material-ui/core/TableHead";
+import IconButton from "@material-ui/core/IconButton";
+import {Autorenew} from "@material-ui/icons";
 
 const useStyles = makeStyles({
     table: {
@@ -26,7 +28,9 @@ export const StarredMessages: React.FC<{ me: UserId }> = ({me}) => {
         <Container fixed maxWidth="md">
             <h1>Favorites</h1>
             <div>
-                <button onClick={_ => dispatch(new LoadOlderMessages())}>Load more</button>
+                <IconButton onClick = {_ => dispatch(new LoadOlderMessages())}>
+                    <Autorenew />
+                </IconButton>
             </div>
             <TableContainer component={Paper}>
                 <Table className={classes.table} aria-label="simple table">
