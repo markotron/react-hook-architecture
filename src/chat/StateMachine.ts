@@ -47,7 +47,7 @@ export enum ActionKind {
     LoadOlderMessages = "LoadOlderMessages",
     OlderMessagesLoaded = "OlderMessagesLoaded",
     UserTyping = "UserTyping",
-    AllMessagesRead = "LastMessageRead",
+    AllMessagesRead = "AllMessagesRead",
     LastMessageReadFetched = "LastMessageReadFetched",
     StarMessage = "StarMessage",
     MessageStarred = "MessageStarred",
@@ -103,37 +103,42 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
     const assertAndCopy = (getProps: (state: DisplayingMessages) => Partial<DisplayingMessages>) =>
         assertAndDo((s) => s.copy(getProps(s)));
 
-    switch (action.kind) {
-        case ActionKind.ErrorOccurred:
-            return new DisplayingError(action.errorMessage);
-        case ActionKind.ConversationLoaded:
-            return state.kind === StateKind.LoadingConversation ?
-                new DisplayingMessages([], null) : unsupportedAction(state, action);
-        case ActionKind.MessageSent:
-            return assertAndCopy(_ => ({messageToSend: undefined}));
-        case ActionKind.NewMessage:
-            return assertAndCopy((s) => ({messages: [...s.messages, action.message]}));
-        case ActionKind.SendMessage:
-            return assertAndCopy(_ => ({messageToSend: {...action.message, userId: me}}));
-        case ActionKind.LoadOlderMessages:
-            return assertAndCopy((s) => ({loadMessagesBefore: s.messages[0]?.id}));
-        case ActionKind.OlderMessagesLoaded:
-            return assertAndCopy((s) => ({
-                messages: [...action.messages, ...s.messages], loadMessagesBefore: undefined
-            }));
-        case ActionKind.UserTyping:
-            return assertAndDo((s) => s.updateTyping(action.userId ?? me, action.isTyping));
-        case ActionKind.AllMessagesRead:
-            return assertAndDo((s) => s.updateLastMessageRead());
-        case ActionKind.LastMessageReadFetched:
-            return assertAndCopy(_ => ({lastReadMessageId: action.messageId}));
-        case ActionKind.MessageStarred:
-            return assertAndDo((s) => s.messageStarred());
-        case ActionKind.StarMessage:
-            return assertAndCopy(_ => ({messageToStar: action.message}));
-        default:
-            assertNever(action);
-    }
+    const R = () => {
+        switch (action.kind) {
+            case ActionKind.ErrorOccurred:
+                return new DisplayingError(action.errorMessage);
+            case ActionKind.ConversationLoaded:
+                return state.kind === StateKind.LoadingConversation ?
+                    new DisplayingMessages([], null) : unsupportedAction(state, action);
+            case ActionKind.MessageSent:
+                return assertAndCopy(_ => ({messageToSend: undefined}));
+            case ActionKind.NewMessage:
+                return assertAndCopy((s) => ({messages: [...s.messages, action.message]}));
+            case ActionKind.SendMessage:
+                return assertAndCopy(_ => ({messageToSend: {...action.message, userId: me}}));
+            case ActionKind.LoadOlderMessages:
+                return assertAndCopy((s) => ({loadMessagesBefore: s.messages[0]?.id}));
+            case ActionKind.OlderMessagesLoaded:
+                return assertAndCopy((s) => ({
+                    messages: [...action.messages, ...s.messages], loadMessagesBefore: undefined
+                }));
+            case ActionKind.UserTyping:
+                return assertAndDo((s) => s.updateTyping(action.userId ?? me, action.isTyping));
+            case ActionKind.AllMessagesRead:
+                return assertAndDo((s) => s.updateLastMessageRead());
+            case ActionKind.LastMessageReadFetched:
+                return assertAndCopy(_ => ({lastReadMessageId: action.messageId}));
+            case ActionKind.MessageStarred:
+                return assertAndDo((s) => s.messageStarred());
+            case ActionKind.StarMessage:
+                return assertAndCopy(_ => ({messageToStar: action.message}));
+            default:
+                assertNever(action);
+        }
+    };
+    const newState = R();
+    console.log(`State: ${state.kind}, action: ${action.kind} => new state: ${newState.kind}`);
+    return newState;
 };
 
 /**

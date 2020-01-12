@@ -34,6 +34,7 @@ const DispatchContext = getDispatchContext<State, Action>();
 export const Chat: React.FC<{ me: UserId }> = ({me}) => {
 
     const [state, dispatch] = useReducer(reducerWithProps(me), initialState);
+    console.log(JSON.stringify(state, null, 2));
     useFeedbacks(me, state, dispatch);
 
     const classes = useStyles();

@@ -1,8 +1,9 @@
 import {Message, UserId, Uuid} from "../model/Model";
 import * as io from "socket.io-client";
 import Axios from "axios-observable"
-import {map, retry, retryWhen} from "rxjs/operators";
-import {Observable, Subject} from "rxjs";
+import {map, retry, retryWhen, switchMap} from "rxjs/operators";
+import {Observable, Subject, timer, zip} from "rxjs";
+import {fromArray} from "rxjs/internal/observable/fromArray";
 
 interface MessagingService {
 
@@ -74,6 +75,9 @@ class MessagingServiceImpl implements MessagingService {
         return Axios
             .get(root + suffix)
             .pipe(
+                // retryWhen(errors =>
+                //     zip(errors, fromArray([0, 100, 200, 1000])).pipe(switchMap(z => timer(z[1])))
+                // ),
                 retry(3),
                 map((response) => response.data)
             );
