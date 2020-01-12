@@ -1,4 +1,6 @@
 import React, {Dispatch, Reducer, ReducerAction, useEffect} from "react";
+import {fromEvent, merge, Observable} from "rxjs";
+import {FromEventTarget} from "rxjs/internal/observable/fromEvent";
 
 type Cleanup = () => void
 type Effect<Substate> = (query: Substate) => Cleanup
@@ -25,8 +27,11 @@ const getIdDispatcher: <State, Action>() => Dispatch<ReducerAction<Reducer<State
 };
 
 export const noop = () => {};
+export function unsupported(msg: string): never {
+    throw new Error(msg);
+};
 export function unsupportedAction<State, Action>(state: State, action: Action): never {
-    throw Error(`Cannot dispatch action ${JSON.stringify(action)} while state is ${JSON.stringify(state)}`);
+    unsupported(`Cannot dispatch action ${JSON.stringify(action)} while state is ${JSON.stringify(state)}`);
 }
 export const Unit = Symbol("unit");
 
@@ -34,4 +39,22 @@ export const Unit = Symbol("unit");
 
 export function assertNever(_: never): never { throw Error(); }
 
+/**
+ * Rx helpers
+ */
+export function fromRefOrThrow<T>(el: FromEventTarget<T> | null, event: string) {
+    return el ? fromEvent(el, event) : unsupported(`Element in null!`);
+}
+
+/**
+ * Merges all the streams and dispatches the actions with the dispatcher.
+ * @param dispatch -- dispatcher used to dispatch the action
+ * @param events -- it's a function so that the evaluation happens when we call it.
+ */
+export function useEventStream<Action>(dispatch: Dispatch<Action>, events: () => Array<Observable<Action>>) {
+    useEffect(() => {
+        const subscription = merge(...events()).subscribe(action => dispatch(action));
+        return () => subscription.unsubscribe();
+    }, [])
+}
 

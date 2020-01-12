@@ -9,24 +9,25 @@ import Input from "@material-ui/core/Input";
 import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import Send from "@material-ui/icons/Send"
-import {assertNever, getDispatchContext, Unit} from "../Common"
+import {assertNever, fromRefOrThrow, getDispatchContext, useEventStream} from "../Common"
 import {Message, UserId, Uuid} from "../model/Model";
-import React, {useContext, useEffect, useReducer, useState} from 'react';
+import React, {ChangeEvent, RefObject, useContext, useReducer, useRef, useState} from 'react';
 import {Set} from "immutable";
 import {
-    Action, AllMessagesRead,
+    Action,
+    AllMessagesRead,
     initialState,
     LoadOlderMessages,
     reducerWithProps,
-    SendMessage, StarMessage,
+    SendMessage,
+    StarMessage,
     State,
     StateKind,
     useFeedbacks,
     UserTyping
 } from "./StateMachine";
 import {Autorenew, ChatBubble, Star} from "@material-ui/icons";
-import {Subject} from "rxjs";
-import {debounceTime} from "rxjs/operators";
+import {debounceTime, map, throttleTime} from "rxjs/operators";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -35,10 +36,9 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     const [state, dispatch] = useReducer(reducerWithProps(me), initialState);
     useFeedbacks(me, state, dispatch);
 
-    // UI
     const classes = useStyles();
 
-    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>, lastReadMessageId?: Uuid, canStar = false) {
+    function getMessagesUI(messages: Array<Message>, usersTyping: Set<UserId>, lastReadMessageId: Uuid | null, canStar = false) {
         const listOfMessages = (msgs: Array<Message>, areNew: boolean = false) =>
             msgs.map(m => <ChatMessage key={m.id}
                                        message={m}
@@ -177,7 +177,7 @@ const UsersTyping: React.FC<{ usersTyping: Set<UserId>, me: UserId }> = ({usersT
     );
 };
 
-const keyPressSubject = new Subject();
+// const keyPressSubject = new Subject();
 const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
 
     // UI State
@@ -195,13 +195,21 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
         dispatch(new AllMessagesRead());
         setMessage("");
     };
-    useEffect(() => {
-            const subscription = keyPressSubject
-                .pipe(debounceTime(5000))
-                .subscribe(_ => dispatch(new UserTyping(false)));
-            return () => subscription.unsubscribe();
-        },
-        []
+
+    const sendMessageRef: RefObject<HTMLInputElement> = useRef(null);
+
+    type CE = ChangeEvent<HTMLInputElement>
+    useEventStream(dispatch, () => [
+        fromRefOrThrow<CE>(sendMessageRef.current, 'keyup')
+            .pipe(
+                throttleTime(1000),
+                map(e => new UserTyping(e.target.value !== ""))
+            ),
+        fromRefOrThrow<CE>(sendMessageRef.current, 'keyup')
+            .pipe(
+                debounceTime(5000),
+                map(_ => new UserTyping(false))
+            )]
     );
 
     return (
@@ -212,13 +220,10 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
                 id="message"
                 type='text'
                 value={message}
-                onChange={(e) => {
-                    const text = e.target.value;
-                    setMessage(text);
-                    dispatch(new UserTyping(text !== ""));
-                }}
+                onChange={e => setMessage(e.target.value)}
+                ref={sendMessageRef}
                 onFocus={_ => dispatch(new AllMessagesRead())}
-                onKeyPress={(e) => e.key === 'Enter' ? sendMessage() : keyPressSubject.next(Unit)}
+                onKeyPress={e => e.key === 'Enter' ? sendMessage() : null}
                 endAdornment={
                     <InputAdornment position="end">
                         <IconButton

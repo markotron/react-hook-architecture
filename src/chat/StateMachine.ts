@@ -28,7 +28,7 @@ export class DisplayingMessages {
         readonly messageToSend?: Message,
         readonly messageToStar?: Message,
         readonly usersTyping: Set<UserId> = Set(),
-        readonly lastReadMessageId?: Uuid,
+        readonly lastReadMessageId: Uuid | null = null,
     ) { }
 }
 
@@ -183,7 +183,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         s => s.kind === StateKind.DisplayingMessages ? s.lastReadMessageId : undefined,
         lastReadMessageId => {
             let subscription: Subscription | null = null;
-            if (lastReadMessageId === undefined) {
+            if (lastReadMessageId === null) {
                 subscription = messagingService
                     .fetchLastReadMessage(me)
                     .subscribe(
