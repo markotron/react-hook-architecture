@@ -8,7 +8,6 @@ import InputLabel from "@material-ui/core/InputLabel";
 import Input from "@material-ui/core/Input";
 import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
-import Button from "@material-ui/core/Button"
 import Send from "@material-ui/icons/Send"
 import {assertNever, getDispatchContext, Unit} from "../Common"
 import {Message, UserId, Uuid} from "../model/Model";
@@ -100,8 +99,8 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
                 </div>
                 <IconButton
                     disabled={state.kind !== StateKind.DisplayingMessages || state.loadMessagesBefore != null}
-                    onClick = {_ => dispatch(new LoadOlderMessages())}>
-                    <Autorenew />
+                    onClick={_ => dispatch(new LoadOlderMessages())}>
+                    <Autorenew/>
                 </IconButton>
                 {content(state)}
                 <ChatInput enabled={isMessageToSend(state)}/>

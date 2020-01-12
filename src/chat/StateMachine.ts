@@ -143,7 +143,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
 
     const useFeedback = feedbackFactory(state);
     useFeedback(
-        s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : null,
+        s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : undefined,
         _ => {
             messagingService.connect();
             messagingService.onConnect(() => dispatch(new ConversationLoaded()));
@@ -153,7 +153,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         }
     );
     useFeedback(
-        s => s.kind === StateKind.DisplayingMessages ? (s.messageToSend ?? null) : null,
+        s => s.kind === StateKind.DisplayingMessages ? s.messageToSend : undefined,
         message => {
             messagingService.sendMessage(message);
             dispatch(new MessageSent());
@@ -161,12 +161,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         }
     );
     useFeedback(
-        s => {
-            if (s.kind !== StateKind.DisplayingMessages) return null;
-            if (s.loadMessagesBefore === undefined) return null;
-            if (s.loadMessagesBefore === null) return undefined;
-            return s.loadMessagesBefore;
-        },
+        s => s.kind === StateKind.DisplayingMessages ? s.loadMessagesBefore : undefined,
         uuid => {
             const subscription = messagingService
                 .fetchMessages(me, uuid)
@@ -178,14 +173,14 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         }
     );
     useFeedback(
-        s => s.kind === StateKind.DisplayingMessages ? s.usersTyping.contains(me) : null,
+        s => s.kind === StateKind.DisplayingMessages ? s.usersTyping.contains(me) : undefined,
         amITyping => {
             messagingService.sendUserTyping(me, amITyping);
             return noop;
         }
     );
     useFeedback(
-        s => s.kind === StateKind.DisplayingMessages ? s.lastReadMessageId : null,
+        s => s.kind === StateKind.DisplayingMessages ? s.lastReadMessageId : undefined,
         lastReadMessageId => {
             let subscription: Subscription | null = null;
             if (lastReadMessageId === undefined) {
@@ -202,7 +197,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         }
     );
     useFeedback(
-        s => s.kind === StateKind.DisplayingMessages ? s.messageToStar ?? null : null,
+        s => s.kind === StateKind.DisplayingMessages ? s.messageToStar : undefined,
         messageToStar => {
             messagingService.markMessageAsStarred(me, messageToStar.id);
             messagingService.newFavorite({...messageToStar, isStarred: !messageToStar.isStarred});

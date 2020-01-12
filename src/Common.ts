@@ -2,15 +2,15 @@ import React, {Dispatch, Reducer, ReducerAction, useEffect} from "react";
 
 type Cleanup = () => void
 type Effect<Substate> = (query: Substate) => Cleanup
-type Query<State, Substate> = (state: State) => Substate | null
+type Query<State, Substate> = (state: State) => Substate | undefined
 type FeedbackFactory =
     <State>(state: State) => <Substate>(query: Query<State, Substate>, effect: Effect<Substate>) => void
 
 export const feedbackFactory: FeedbackFactory = <State>(state: State) => {
     return function <Substate>(query: Query<State, Substate>, effect: Effect<Substate>) {
-        const q: Substate | null = query(state);
+        const q: Substate | undefined = query(state);
         useEffect(() => {
-            if (q === null) return;
+            if (q === undefined) return;
             return effect(q)
             // https://reactjs.org/docs/hooks-faq.html#is-it-safe-to-omit-functions-from-the-list-of-dependencies
             // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -30,8 +30,8 @@ export function unsupportedAction<State, Action>(state: State, action: Action): 
 }
 export const Unit = Symbol("unit");
 
-export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
+// export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
 
-export function assertNever(state: never): never { throw Error(); }
+export function assertNever(_: never): never { throw Error(); }
 
 

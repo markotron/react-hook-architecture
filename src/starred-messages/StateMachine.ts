@@ -54,11 +54,7 @@ export const reducerWithProps: Reducer<State, Action> = (state, action) => {
 export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action>) => {
     const useFeedback = feedbackFactory(state);
     useFeedback(
-        s => {
-            if (s.loadMessagesBefore === undefined) return null;
-            if (s.loadMessagesBefore === null) return undefined;
-            return s.loadMessagesBefore;
-        },
+        s => s.loadMessagesBefore,
         uuid => {
             const subscription = messagingService
                 .fetchStarredMessages(me, uuid)

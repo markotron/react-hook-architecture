@@ -30,11 +30,11 @@ interface MessagingService {
     /**
      * REST API methods
      */
-    fetchMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>>
+    fetchMessages(userId: UserId, beforeMessageId: Uuid | null): Observable<Array<Message>>
 
     fetchLastReadMessage(userId: UserId): Observable<Uuid>
 
-    fetchStarredMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>>
+    fetchStarredMessages(userId: UserId, beforeMessageId: Uuid | null): Observable<Array<Message>>
 
     /**
      * Observables
@@ -68,7 +68,7 @@ class MessagingServiceImpl implements MessagingService {
             );
     }
 
-    fetchMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>> {
+    fetchMessages(userId: UserId, beforeMessageId: Uuid | null): Observable<Array<Message>> {
         const root = `${this.baseUrl}messages?userId=${userId}`;
         const suffix = beforeMessageId ? `&uuid=${beforeMessageId}` : "";
         return Axios
@@ -79,7 +79,7 @@ class MessagingServiceImpl implements MessagingService {
             );
     }
 
-    fetchStarredMessages(userId: UserId, beforeMessageId?: Uuid): Observable<Array<Message>> {
+    fetchStarredMessages(userId: UserId, beforeMessageId: Uuid | null): Observable<Array<Message>> {
         const root = `${this.baseUrl}messages/starred?userId=${userId}`;
         const suffix = beforeMessageId ? `&beforeId=${beforeMessageId}` : "";
         return Axios
