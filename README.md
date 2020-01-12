@@ -5,7 +5,8 @@
 * Ability to star messages. This feature shows how components can communicate via services using RxJS. 
 * Allocating and releasing resorces properly. Implemented with the Hookback architecture.
   * For canceling http requests we use `axios-observable`.
-* Explicit state and state transitions. And yes, sideeffect are also represented within the state. Implemented with Hookback architecture. 
+* Explicit state and state transitions. And yes, sideeffect are also represented within the state. Implemented with Hookback architecture.
+* State and Action exaustivness. Thanks to Typescript. 
 * Who is typing feature. Implemented through web sockets. Two opitmizations are implemented as well: 
   * We're not emitting that the user is typing on every key press, we're throttling for 1 second instead. 
   * We don't say that the user stopped typing only after there isn't any text in the input field, but also if the user didn't enter any new characters for 5 seconds. 
