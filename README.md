@@ -1,3 +1,19 @@
+## Highlights 
+
+* Real time chat implemented with web sockets (Socket.IO).
+* Messages are paginated. Initially you get 5 and then you can load more. 
+* Ability to star messages. This feature shows how components can communicate via services using RxJS. 
+* Allocating and releasing resorces properly. Implemented with the Hookback architecture.
+  * For canceling http requests we use `axios-observable`.
+* Explicit state and state transitions. And yes, sideeffect are also represented within the state. Implemented with Hookback architecture. 
+* Who is typing feature. Implemented through web sockets. Two opitmizations are implemented as well: 
+  * We're not emitting that the user is typing on every key press, we're throttling for 1 second instead. 
+  * We don't say that the user stopped typing only after there isn't any text in the input field, but also if the user didn't enter any new characters for 5 seconds. 
+  * Both these optimizations are built with RxJS. 
+* We're automatically retrying requests that fail. We're using a simple retry strategy but we also implemented exponential backoff. Also implemented with RxJS. 
+* Messages are marked as read and unread so that the user knows which massages are new. 
+
+
 ## How to run? 
 
 * Run the [simple-chat-backend](https://github.com/markotron/simple-chat-backend). 
