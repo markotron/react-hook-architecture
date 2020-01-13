@@ -33,7 +33,8 @@ export function unsupported(msg: string): never {
 export function unsupportedAction<State, Action>(state: State, action: Action): never {
     unsupported(`Cannot dispatch action ${JSON.stringify(action)} while state is ${JSON.stringify(state)}`);
 }
-export const Unit = Symbol("unit");
+// I initially wrote this as "Symbol("unit")" but this cannot be stringified with JSON.stringify.
+export const Unit = {};
 
 // export type TypeFromCreator<T extends { [key: string]: (...args: any) => object }> = ReturnType<T[keyof T]>;
 
@@ -51,10 +52,16 @@ export function fromRefOrThrow<T>(el: FromEventTarget<T> | null, event: string) 
  * @param dispatch -- dispatcher used to dispatch the action
  * @param events -- it's a function so that the evaluation happens when we call it.
  */
-export function useEventStream<Action>(dispatch: Dispatch<Action>, events: () => Array<Observable<Action>>) {
+export function useEventStream<Action, Query>(
+    dispatch: Dispatch<Action>,
+    events: () => Array<Observable<Action>>,
+    query?: Query | null
+) {
+    const deps = [JSON.stringify(query === undefined ? Unit : query)];
     useEffect(() => {
+        if(query === null) return;
         const subscription = merge(...events()).subscribe(action => dispatch(action));
         return () => subscription.unsubscribe();
-    }, [])
+    }, deps)
 }
 

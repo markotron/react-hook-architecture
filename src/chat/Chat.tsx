@@ -9,7 +9,7 @@ import Input from "@material-ui/core/Input";
 import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import Send from "@material-ui/icons/Send"
-import {assertNever, fromRefOrThrow, getDispatchContext, useEventStream} from "../Common"
+import {assertNever, fromRefOrThrow, getDispatchContext, Unit, useEventStream} from "../Common"
 import {Message, UserId, Uuid} from "../model/Model";
 import React, {ChangeEvent, RefObject, useContext, useReducer, useRef, useState} from 'react';
 import {Set} from "immutable";
@@ -61,7 +61,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
     function getErrorUI(message: string) {
         return (
             <React.Fragment>
-                <p>Message</p>
+                <p>{message}</p>
             </React.Fragment>
         )
     }
@@ -210,7 +210,8 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
             .pipe(
                 debounceTime(5000),
                 map(_ => new UserTyping(false))
-            )]
+            )],
+        enabled ? Unit : null
     );
 
     return (

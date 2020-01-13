@@ -152,6 +152,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         _ => {
             messagingService.connect();
             messagingService.onConnect(() => dispatch(new ConversationLoaded()));
+            messagingService.onDisconnect(() => dispatch(new ErrorOccurred("Disconnected!")));
             messagingService.onNewMessage((message: Message) => dispatch(new NewMessage(message)));
             messagingService.onUserTyping((userId, isTyping) => dispatch(new UserTyping(isTyping, userId)));
             return () => messagingService.disconnect()

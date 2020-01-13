@@ -108,11 +108,16 @@ class MessagingServiceImpl implements MessagingService {
     }
 
     disconnect(): void {
+        console.log("Closing the socket!");
         this.socket?.close();
     }
 
     onConnect(block: () => void): void {
         this.listenOrThrow("connect", block);
+    }
+
+    onDisconnect(block: () => void): void {
+        this.listenOrThrow("disconnect", block);
     }
 
     onNewMessage(block: (message: Message) => void): void {
