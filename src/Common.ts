@@ -56,13 +56,14 @@ export function fromRefOrThrow<T>(el: FromEventTarget<T> | null, event: string) 
 export function useEventStream<Action, Query>(
     dispatch: Dispatch<Action>,
     events: () => Array<Observable<Action>>,
-    query?: Query | null
+    query?: Query
 ) {
     const deps = [JSON.stringify(query === undefined ? Unit : query)];
     useEffect(() => {
-        if(query === null) return;
+        if(query === undefined) return;
         const subscription = merge(...events()).subscribe(action => dispatch(action));
         return () => subscription.unsubscribe();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, deps)
 }
 

@@ -1,9 +1,8 @@
 import {Message, UserId, Uuid} from "../model/Model";
 import * as io from "socket.io-client";
 import Axios from "axios-observable"
-import {map, retry, retryWhen, switchMap} from "rxjs/operators";
-import {Observable, Subject, timer, zip} from "rxjs";
-import {fromArray} from "rxjs/internal/observable/fromArray";
+import {map, retry} from "rxjs/operators";
+import {Observable, Subject} from "rxjs";
 
 interface MessagingService {
 

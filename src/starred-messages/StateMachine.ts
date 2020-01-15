@@ -1,6 +1,6 @@
 import {Message, UserId, Uuid} from "../model/Model";
 import {Dispatch, Reducer} from "react";
-import {assertNever, feedbackFactory, noop, Unit} from "../Common";
+import {assertNever, feedbackFactory, Unit} from "../Common";
 import messagingService from "../service/MessagingService";
 
 // @formatter:off

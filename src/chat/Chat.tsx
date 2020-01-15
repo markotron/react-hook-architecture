@@ -15,7 +15,8 @@ import React, {ChangeEvent, RefObject, useContext, useReducer, useRef, useState}
 import {Set} from "immutable";
 import {
     Action,
-    AllMessagesRead, DisplayingError,
+    AllMessagesRead,
+    DisplayingError,
     initialState,
     LoadOlderMessages,
     reducerWithProps,
@@ -27,7 +28,7 @@ import {
     UserTyping
 } from "./StateMachine";
 import {Autorenew, ChatBubble, Star} from "@material-ui/icons";
-import {debounceTime, map, tap, throttleTime} from "rxjs/operators";
+import {debounceTime, map, throttleTime} from "rxjs/operators";
 import MuiAlert from "@material-ui/lab/Alert/Alert";
 
 const DispatchContext = getDispatchContext<State, Action>();
@@ -35,7 +36,6 @@ const DispatchContext = getDispatchContext<State, Action>();
 export const Chat: React.FC<{ me: UserId }> = ({me}) => {
 
     const [state, dispatch] = useReducer(reducerWithProps(me), initialState);
-    console.log(JSON.stringify(state, null, 2));
     useFeedbacks(me, state, dispatch);
 
     const classes = useStyles();
@@ -63,7 +63,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
         return (
             <React.Fragment>
                 <MuiAlert elevation={6} variant="filled" severity="error">
-                    {errorState.errorMessage} I'll automatically retry in {errorState.retryInSec} seconds.
+                    {errorState.errorMessage}
                 </MuiAlert>
             </React.Fragment>
         )
@@ -207,16 +207,14 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
         fromRefOrThrow<CE>(sendMessageRef.current, 'keyup')
             .pipe(
                 throttleTime(1000),
-                map(e => new UserTyping(e.target.value !== "")),
-                tap(n => console.log(JSON.stringify(n)))
+                map(e => new UserTyping(e.target.value !== ""))
             ),
         fromRefOrThrow<CE>(sendMessageRef.current, 'keyup')
             .pipe(
                 debounceTime(5000),
-                map(_ => new UserTyping(false)),
-                tap(n => console.log(JSON.stringify(n)))
+                map(_ => new UserTyping(false))
             )],
-        enabled ? Unit : null
+        enabled ? Unit : undefined
     );
 
     return (

@@ -3,7 +3,7 @@ import {Set} from "immutable";
 import {Dispatch, Reducer} from "react";
 import {assertNever, feedbackFactory, noop, Unit, unsupportedAction} from "../Common";
 import messagingService from "../service/MessagingService";
-import {Subscription, timer} from "rxjs";
+import {Subscription} from "rxjs";
 
 // @formatter:off
 /**
@@ -20,7 +20,6 @@ export class DisplayingError {
     kind = StateKind.DisplayingError as const;
     constructor(
         readonly errorMessage: string,
-        readonly retryInSec: number = 3,
     ) { }
 }
 export class DisplayingMessages {
@@ -54,7 +53,6 @@ export enum ActionKind {
     LastMessageReadFetched = "LastMessageReadFetched",
     StarMessage = "StarMessage",
     MessageStarred = "MessageStarred",
-    Retry = "Retry",
 }
 
 export class ErrorOccurred {
@@ -91,15 +89,10 @@ export class StarMessage {
     constructor(readonly message: Message) { }
 }
 export class MessageStarred { kind = ActionKind.MessageStarred as const; }
-export class Retry {
-    kind = ActionKind.Retry as const;
-    constructor(readonly seconds: number) {}
-}
 
 export type Action = ErrorOccurred | ConversationLoaded | MessageSent | NewMessage |
     SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping |
-    AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred |
-    Retry
+    AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred
 
 // @formatter:on
 /**
@@ -112,50 +105,37 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
     const assertAndCopy = (getProps: (state: DisplayingMessages) => Partial<DisplayingMessages>) =>
         assertAndDo((s) => s.copy(getProps(s)));
 
-    const R = () => {
-        switch (action.kind) {
-            case ActionKind.Retry:
-                return  state.kind !== StateKind.DisplayingError
-                    ? unsupportedAction(state, action)
-                    : action.seconds === 0
-                    ? initialState
-                    : new DisplayingError(state.errorMessage, state.retryInSec-1);
-            case ActionKind.ErrorOccurred:
-                return new DisplayingError(action.errorMessage);
-            case ActionKind.ConversationLoaded:
-                return state.kind === StateKind.LoadingConversation ?
-                    new DisplayingMessages([], null) : unsupportedAction(state, action);
-            case ActionKind.MessageSent:
-                return assertAndCopy(_ => ({messageToSend: undefined}));
-            case ActionKind.NewMessage:
-                return assertAndCopy((s) => ({messages: [...s.messages, action.message]}));
-            case ActionKind.SendMessage:
-                return assertAndCopy(_ => ({messageToSend: {...action.message, userId: me}}));
-            case ActionKind.LoadOlderMessages:
-                return assertAndCopy((s) => ({loadMessagesBefore: s.messages[0]?.id}));
-            case ActionKind.OlderMessagesLoaded:
-                return assertAndCopy((s) => ({
-                    messages: [...action.messages, ...s.messages], loadMessagesBefore: undefined
-                }));
-            case ActionKind.UserTyping:
-                return assertAndDo((s) => s.updateTyping(action.userId ?? me, action.isTyping));
-            case ActionKind.AllMessagesRead:
-                return assertAndDo((s) => s.updateLastMessageRead());
-            case ActionKind.LastMessageReadFetched:
-                return assertAndCopy(_ => ({lastReadMessageId: action.messageId}));
-            case ActionKind.MessageStarred:
-                return assertAndDo((s) => s.messageStarred());
-            case ActionKind.StarMessage:
-                return assertAndCopy(_ => ({messageToStar: action.message}));
-            default:
-                assertNever(action);
-        }
-    };
-    const newState = R();
-    const now = new Date();
-    const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-    console.log(`[${time}] State: ${state.kind}, action: ${action.kind} => new state: ${newState.kind}`);
-    return newState;
+    switch (action.kind) {
+        case ActionKind.ErrorOccurred:
+            return new DisplayingError(action.errorMessage);
+        case ActionKind.ConversationLoaded:
+            return state.kind === StateKind.LoadingConversation ?
+                new DisplayingMessages([], null) : unsupportedAction(state, action);
+        case ActionKind.MessageSent:
+            return assertAndCopy(_ => ({messageToSend: undefined}));
+        case ActionKind.NewMessage:
+            return assertAndCopy((s) => ({messages: [...s.messages, action.message]}));
+        case ActionKind.SendMessage:
+            return assertAndCopy(_ => ({messageToSend: {...action.message, userId: me}}));
+        case ActionKind.LoadOlderMessages:
+            return assertAndCopy((s) => ({loadMessagesBefore: s.messages[0]?.id}));
+        case ActionKind.OlderMessagesLoaded:
+            return assertAndCopy((s) => ({
+                messages: [...action.messages, ...s.messages], loadMessagesBefore: undefined
+            }));
+        case ActionKind.UserTyping:
+            return assertAndDo((s) => s.updateTyping(action.userId ?? me, action.isTyping));
+        case ActionKind.AllMessagesRead:
+            return assertAndDo((s) => s.updateLastMessageRead());
+        case ActionKind.LastMessageReadFetched:
+            return assertAndCopy(_ => ({lastReadMessageId: action.messageId}));
+        case ActionKind.MessageStarred:
+            return assertAndDo((s) => s.messageStarred());
+        case ActionKind.StarMessage:
+            return assertAndCopy(_ => ({messageToStar: action.message}));
+        default:
+            assertNever(action);
+    }
 };
 
 /**
@@ -165,22 +145,10 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
 
     const useFeedback = feedbackFactory(state);
     useFeedback(
-        s => s.kind === StateKind.DisplayingError ? s.retryInSec : undefined,
-        seconds => {
-            // const subscription = timer(seconds * 1000).subscribe(_ => dispatch(new Retry()));
-            const subscription = timer(1000).subscribe(_ => dispatch(new Retry(seconds)));
-            return () => subscription.unsubscribe();
-        }
-    );
-    useFeedback(
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : undefined,
         _ => {
             messagingService.connect();
-            messagingService.onConnect(() => {
-                    console.log("Conncted!");
-                    dispatch(new ConversationLoaded());
-                }
-            );
+            messagingService.onConnect(() => dispatch(new ConversationLoaded()));
             messagingService.onDisconnect(() => dispatch(new ErrorOccurred("Disconnected!")));
             messagingService.onNewMessage((message: Message) => dispatch(new NewMessage(message)));
             messagingService.onUserTyping((userId, isTyping) => dispatch(new UserTyping(isTyping, userId)));
