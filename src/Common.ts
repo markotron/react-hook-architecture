@@ -51,6 +51,7 @@ export function fromRefOrThrow<T>(el: FromEventTarget<T> | null, event: string) 
  * Merges all the streams and dispatches the actions with the dispatcher.
  * @param dispatch -- dispatcher used to dispatch the action
  * @param events -- it's a function so that the evaluation happens when we call it.
+ * @param query
  */
 export function useEventStream<Action, Query>(
     dispatch: Dispatch<Action>,

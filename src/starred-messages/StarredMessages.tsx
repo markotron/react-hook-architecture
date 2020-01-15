@@ -12,12 +12,14 @@ import Container from "@material-ui/core/Container";
 import TableHead from "@material-ui/core/TableHead";
 import IconButton from "@material-ui/core/IconButton";
 import {Autorenew} from "@material-ui/icons";
+import MuiAlert from "@material-ui/lab/Alert";
 
 const useStyles = makeStyles({
     table: {
         minWidth: 650,
     },
 });
+
 export const StarredMessages: React.FC<{ me: UserId }> = ({me}) => {
 
     const [state, dispatch] = useReducer(reducerWithProps, initialState);
@@ -27,6 +29,7 @@ export const StarredMessages: React.FC<{ me: UserId }> = ({me}) => {
     return (
         <Container fixed maxWidth="md">
             <h1>Favorites</h1>
+            {!!state.error && <MuiAlert elevation={6} variant="filled" severity="error">{state.error}</MuiAlert>}
             <div>
                 <IconButton onClick = {_ => dispatch(new LoadOlderMessages())}>
                     <Autorenew />

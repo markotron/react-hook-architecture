@@ -3,7 +3,7 @@ import {Set} from "immutable";
 import {Dispatch, Reducer} from "react";
 import {assertNever, feedbackFactory, noop, Unit, unsupportedAction} from "../Common";
 import messagingService from "../service/MessagingService";
-import {Subscription} from "rxjs";
+import {Subscription, timer} from "rxjs";
 
 // @formatter:off
 /**
@@ -18,7 +18,10 @@ export enum StateKind {
 export class LoadingConversation { kind = StateKind.LoadingConversation as const; }
 export class DisplayingError {
     kind = StateKind.DisplayingError as const;
-    constructor(readonly errorMessage: string) { }
+    constructor(
+        readonly errorMessage: string,
+        readonly retryInSec: number = 3,
+    ) { }
 }
 export class DisplayingMessages {
     kind = StateKind.DisplayingMessages as const;
@@ -51,6 +54,7 @@ export enum ActionKind {
     LastMessageReadFetched = "LastMessageReadFetched",
     StarMessage = "StarMessage",
     MessageStarred = "MessageStarred",
+    Retry = "Retry",
 }
 
 export class ErrorOccurred {
@@ -87,10 +91,15 @@ export class StarMessage {
     constructor(readonly message: Message) { }
 }
 export class MessageStarred { kind = ActionKind.MessageStarred as const; }
+export class Retry {
+    kind = ActionKind.Retry as const;
+    constructor(readonly seconds: number) {}
+}
 
 export type Action = ErrorOccurred | ConversationLoaded | MessageSent | NewMessage |
     SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping |
-    AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred
+    AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred |
+    Retry
 
 // @formatter:on
 /**
@@ -105,6 +114,12 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
 
     const R = () => {
         switch (action.kind) {
+            case ActionKind.Retry:
+                return  state.kind !== StateKind.DisplayingError
+                    ? unsupportedAction(state, action)
+                    : action.seconds === 0
+                    ? initialState
+                    : new DisplayingError(state.errorMessage, state.retryInSec-1);
             case ActionKind.ErrorOccurred:
                 return new DisplayingError(action.errorMessage);
             case ActionKind.ConversationLoaded:
@@ -137,7 +152,9 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
         }
     };
     const newState = R();
-    console.log(`State: ${state.kind}, action: ${action.kind} => new state: ${newState.kind}`);
+    const now = new Date();
+    const time = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    console.log(`[${time}] State: ${state.kind}, action: ${action.kind} => new state: ${newState.kind}`);
     return newState;
 };
 
@@ -148,14 +165,26 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
 
     const useFeedback = feedbackFactory(state);
     useFeedback(
+        s => s.kind === StateKind.DisplayingError ? s.retryInSec : undefined,
+        seconds => {
+            // const subscription = timer(seconds * 1000).subscribe(_ => dispatch(new Retry()));
+            const subscription = timer(1000).subscribe(_ => dispatch(new Retry(seconds)));
+            return () => subscription.unsubscribe();
+        }
+    );
+    useFeedback(
         s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : undefined,
         _ => {
             messagingService.connect();
-            messagingService.onConnect(() => dispatch(new ConversationLoaded()));
+            messagingService.onConnect(() => {
+                    console.log("Conncted!");
+                    dispatch(new ConversationLoaded());
+                }
+            );
             messagingService.onDisconnect(() => dispatch(new ErrorOccurred("Disconnected!")));
             messagingService.onNewMessage((message: Message) => dispatch(new NewMessage(message)));
             messagingService.onUserTyping((userId, isTyping) => dispatch(new UserTyping(isTyping, userId)));
-            return () => messagingService.disconnect()
+            return () => messagingService.disconnect();
         }
     );
     useFeedback(
@@ -224,22 +253,22 @@ declare module "./StateMachine" {
         messageStarred: () => DisplayingMessages
     }
 }
-DisplayingMessages.prototype.copy = function(props) { // should be something like PartialProperties<DisplayMessages>
+DisplayingMessages.prototype.copy = function (props) { // should be something like PartialProperties<DisplayMessages>
     // Copying classes is hard.
     return Object.assign(Object.create(Object.getPrototypeOf(this)), {...this, ...props});
 };
-DisplayingMessages.prototype.updateTyping = function(id, isTyping) {
+DisplayingMessages.prototype.updateTyping = function (id, isTyping) {
     return this.copy({usersTyping: isTyping ? this.usersTyping.add(id) : this.usersTyping.remove(id)});
 };
-DisplayingMessages.prototype.updateLastMessageRead = function() {
+DisplayingMessages.prototype.updateLastMessageRead = function () {
     const length = this.messages.length;
-    if(length === 0) return this;
+    if (length === 0) return this;
     const lastReadMessage = this.messages[this.messages.length - 1];
     return this.copy({lastReadMessageId: lastReadMessage.id})
 };
-DisplayingMessages.prototype.messageStarred = function() {
+DisplayingMessages.prototype.messageStarred = function () {
     const messageToStar = this.messageToStar;
-    if(messageToStar === undefined) return this;
+    if (messageToStar === undefined) return this;
     const message = {...messageToStar, isStarred: !messageToStar.isStarred} as Message;
     const messageToStarId = message.id;
     const messageToStarIndex = this.messages.findIndex((m) => m.id === messageToStarId);

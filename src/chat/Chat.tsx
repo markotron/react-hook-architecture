@@ -15,7 +15,7 @@ import React, {ChangeEvent, RefObject, useContext, useReducer, useRef, useState}
 import {Set} from "immutable";
 import {
     Action,
-    AllMessagesRead,
+    AllMessagesRead, DisplayingError,
     initialState,
     LoadOlderMessages,
     reducerWithProps,
@@ -27,7 +27,8 @@ import {
     UserTyping
 } from "./StateMachine";
 import {Autorenew, ChatBubble, Star} from "@material-ui/icons";
-import {debounceTime, map, throttleTime} from "rxjs/operators";
+import {debounceTime, map, tap, throttleTime} from "rxjs/operators";
+import MuiAlert from "@material-ui/lab/Alert/Alert";
 
 const DispatchContext = getDispatchContext<State, Action>();
 
@@ -58,10 +59,12 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
         );
     }
 
-    function getErrorUI(message: string) {
+    function getErrorUI(errorState: DisplayingError) {
         return (
             <React.Fragment>
-                <p>{message}</p>
+                <MuiAlert elevation={6} variant="filled" severity="error">
+                    {errorState.errorMessage} I'll automatically retry in {errorState.retryInSec} seconds.
+                </MuiAlert>
             </React.Fragment>
         )
     }
@@ -81,7 +84,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             case StateKind.DisplayingMessages:
                 return getMessagesUI(state.messages, state.usersTyping, state.lastReadMessageId, state.messageToSend === undefined);
             case StateKind.DisplayingError:
-                return getErrorUI(state.errorMessage);
+                return getErrorUI(state);
             default:
                 assertNever(state);
         }
@@ -204,12 +207,14 @@ const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
         fromRefOrThrow<CE>(sendMessageRef.current, 'keyup')
             .pipe(
                 throttleTime(1000),
-                map(e => new UserTyping(e.target.value !== ""))
+                map(e => new UserTyping(e.target.value !== "")),
+                tap(n => console.log(JSON.stringify(n)))
             ),
         fromRefOrThrow<CE>(sendMessageRef.current, 'keyup')
             .pipe(
                 debounceTime(5000),
-                map(_ => new UserTyping(false))
+                map(_ => new UserTyping(false)),
+                tap(n => console.log(JSON.stringify(n)))
             )],
         enabled ? Unit : null
     );

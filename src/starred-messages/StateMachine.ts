@@ -45,7 +45,7 @@ export const reducerWithProps: Reducer<State, Action> = (state, action) => {
         case ActionKind.OlderMessagesLoaded:
             return new State([...action.messages, ...state.messages], undefined);
         case ActionKind.ErrorOccurred:
-            return new State(state.messages, state.loadMessagesBefore, action.errorMessage);
+            return new State(state.messages, undefined, action.errorMessage);
         default:
             assertNever(action)
     }
@@ -60,7 +60,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
                 .fetchStarredMessages(me, uuid)
                 .subscribe(
                     (messages: Array<Message>) => dispatch(new OlderMessagesLoaded(messages)),
-                    (reason: any) => dispatch(new ErrorOccurred(reason))
+                    (reason: any) => dispatch(new ErrorOccurred(reason.message))
                 );
             return () => subscription.unsubscribe();
         }
