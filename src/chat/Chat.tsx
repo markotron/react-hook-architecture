@@ -157,9 +157,11 @@ const ChatMessage: React.FC<{ message: Message, isNew: boolean, align: string, c
     const dispatch = useContext(DispatchContext);
     return (
         <div className={applyClasses()}>
-            {align === 'left' && isNew && <IconButton disabled={true}>
-                <ChatBubble visibility={0} color="primary"/>
-            </IconButton>}
+            {align === 'left' && isNew &&
+                <IconButton disabled={true}>
+                    <ChatBubble visibility={0} color="primary"/>
+                </IconButton>
+            }
             <span className={clsx(classes.message)}>{message.message}</span>
             <IconButton
                 disabled={!canStar}
