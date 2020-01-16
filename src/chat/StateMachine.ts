@@ -10,12 +10,12 @@ import {Subscription} from "rxjs";
  * States
  */
 export enum StateKind {
-    LoadingConversation = "LoadingConversation",
+    Connecting = "Connecting",
     DisplayingMessages = "DisplayingMessages",
     DisplayingError = "DisplayingError",
 }
 
-export class LoadingConversation { kind = StateKind.LoadingConversation as const; }
+export class Connecting { kind = StateKind.Connecting as const; }
 export class DisplayingError {
     kind = StateKind.DisplayingError as const;
     constructor(
@@ -34,8 +34,8 @@ export class DisplayingMessages {
     ) { }
 }
 
-export type State = LoadingConversation | DisplayingError | DisplayingMessages
-export const initialState = new LoadingConversation();
+export type State = Connecting | DisplayingError | DisplayingMessages
+export const initialState = new Connecting();
 
 /**
  * Actions
@@ -43,7 +43,7 @@ export const initialState = new LoadingConversation();
 export enum ActionKind {
     ErrorOccurred = "ErrorOccurred",
     NewMessage = "NewMessage",
-    ConversationLoaded = "ConversationLoaded",
+    Connected = "Connected",
     SendMessage = "SendMessage",
     MessageSent = "MessageSent",
     LoadOlderMessages = "LoadOlderMessages",
@@ -60,7 +60,7 @@ export class ErrorOccurred {
     readonly kind = ActionKind.ErrorOccurred as const;
     constructor(readonly errorMessage: string) { }
 }
-export class ConversationLoaded { kind = ActionKind.ConversationLoaded as const; }
+export class Connected { kind = ActionKind.Connected as const; }
 export class MessageSent { kind = ActionKind.MessageSent as const; }
 export class NewMessage {
     kind = ActionKind.NewMessage as const;
@@ -90,7 +90,7 @@ export class StarMessage {
 }
 export class MessageStarred { kind = ActionKind.MessageStarred as const; }
 
-export type Action = ErrorOccurred | ConversationLoaded | MessageSent | NewMessage |
+export type Action = ErrorOccurred | Connected | MessageSent | NewMessage |
     SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping |
     AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred
 
@@ -108,8 +108,8 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
     switch (action.kind) {
         case ActionKind.ErrorOccurred:
             return new DisplayingError(action.errorMessage);
-        case ActionKind.ConversationLoaded:
-            return state.kind === StateKind.LoadingConversation ?
+        case ActionKind.Connected:
+            return state.kind === StateKind.Connecting ?
                 new DisplayingMessages([], null) : unsupportedAction(state, action);
         case ActionKind.MessageSent:
             return assertAndCopy(_ => ({messageToSend: undefined}));
@@ -145,10 +145,10 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
 
     const useFeedback = feedbackFactory(state);
     useFeedback(
-        s => s.kind === StateKind.LoadingConversation || s.kind === StateKind.DisplayingMessages ? Unit : undefined,
+        s => s.kind === StateKind.Connecting || s.kind === StateKind.DisplayingMessages ? Unit : undefined,
         _ => {
             messagingService.connect();
-            messagingService.onConnect(() => dispatch(new ConversationLoaded()));
+            messagingService.onConnect(() => dispatch(new Connected()));
             messagingService.onDisconnect(() => dispatch(new ErrorOccurred("Disconnected!")));
             messagingService.onNewMessage((message: Message) => dispatch(new NewMessage(message)));
             messagingService.onUserTyping((userId, isTyping) => dispatch(new UserTyping(isTyping, userId)));

@@ -3,7 +3,8 @@
   <component name="ChangeListManager">
     <list default="true" id="729520b8-d983-481a-8a84-8506637bf89b" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chat/Chat.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/Chat.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/chat/StateMachine.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/StateMachine.ts" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />

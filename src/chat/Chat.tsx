@@ -79,7 +79,7 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
 
     function content(state: State) {
         switch (state.kind) {
-            case StateKind.LoadingConversation:
+            case StateKind.Connecting:
                 return getLoadingUI();
             case StateKind.DisplayingMessages:
                 return getMessagesUI(state.messages, state.usersTyping, state.lastReadMessageId, state.messageToSend === undefined);
