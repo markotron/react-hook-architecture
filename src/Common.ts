@@ -56,9 +56,9 @@ export function fromRefOrThrow<T>(el: FromEventTarget<T> | null, event: string) 
 export function useEventStream<Action, Query>(
     dispatch: Dispatch<Action>,
     events: () => Array<Observable<Action>>,
-    query?: Query
+    query: Query
 ) {
-    const deps = [JSON.stringify(query === undefined ? Unit : query)];
+    const deps = [JSON.stringify(query)];
     useEffect(() => {
         if(query === undefined) return;
         const subscription = merge(...events()).subscribe(action => dispatch(action));
