@@ -1,8 +1,14 @@
 import {User, UserId} from "../model/Model";
 import Axios from "axios-observable";
-import {map, publishReplay, refCount, retry, share} from "rxjs/operators";
-import {Observable} from "rxjs";
+import {map, publishReplay, refCount, retry, share, tap} from "rxjs/operators";
+import {Observable, of} from "rxjs";
 import {unsupported} from "../Common";
+import LRU from "lru-cache";
+
+interface ValueAndRequest<Value> {
+    value?: Value
+    request: Observable<Value>
+}
 
 interface UserService {
     getUserWithId: (id: UserId) => Observable<User>
@@ -10,24 +16,40 @@ interface UserService {
 
 class UserServiceImpl implements UserService {
 
-    private readonly baseUrl = "http://localhost:5000/";
-    private readonly userRequests: Map<UserId, Observable<User>> = new Map();
+    private static readonly baseUrl = "http://localhost:5000/";
+    private static readonly cacheOptions = {
+        max: 100,
+        maxAge: 1000 * 60 * 60
+    };
+
+    private readonly userCache = new LRU<UserId, ValueAndRequest<User>>(UserServiceImpl.cacheOptions);
 
     getUserWithId(id: UserId): Observable<User> {
 
-        if(this.userRequests.has(id))
-            return this.userRequests.get(id) ?? unsupported("Can't happen!");
+        const valueAndRequest = this.userCache.get(id);
+        if(valueAndRequest && valueAndRequest.value) return of(valueAndRequest.value);
+        if(valueAndRequest) return valueAndRequest.request;
 
         const path = `users/?userId=${id}`;
         const userRequest = Axios
-            .get(this.baseUrl + path)
+            .get(UserServiceImpl.baseUrl + path)
             .pipe(
                 map(response => response.data),
+                tap(user => this.cacheUser(id, user)),
                 publishReplay(1),
                 refCount()
             );
-        this.userRequests.set(id, userRequest);
+        this.userCache.set(id, {
+           request: userRequest
+        });
         return userRequest;
+    }
+
+    private cacheUser(id: UserId, user: User) {
+        const valueAndRequest = this.userCache.get(id);
+        if(!valueAndRequest) unsupported("There must be a request cached at this point!");
+        if(valueAndRequest.value) unsupported("Value must be undefined at this point!");
+        valueAndRequest.value = user;
     }
 }
 
