@@ -10,14 +10,14 @@ import InputAdornment from "@material-ui/core/InputAdornment";
 import IconButton from "@material-ui/core/IconButton";
 import Send from "@material-ui/icons/Send"
 import {assertNever, fromRefOrThrow, getDispatchContext, Unit, useEventStream} from "../Common"
-import {Message, UserId, Uuid} from "../model/Model";
+import {isUser, Message, UserId, Uuid} from "../model/Model";
 import React, {ChangeEvent, RefObject, useContext, useReducer, useRef, useState} from 'react';
 import {Set} from "immutable";
 import {
     Action,
     AllMessagesRead,
     DisplayingError,
-    initialState,
+    initialState, LastMessageRead,
     LoadOlderMessages,
     reducerWithProps,
     SendMessage,
@@ -99,7 +99,11 @@ export const Chat: React.FC<{ me: UserId }> = ({me}) => {
             <Container fixed maxWidth="md" className={clsx(classes.boxed)}>
                 <CssBaseline/>
                 <div className={clsx(classes.right)}>
-                    <h2>User ID: {me}</h2>
+                    User ID: {me}
+                    {
+                        state.kind === StateKind.DisplayingMessages && isUser(state.user) &&
+                        <h3>User name: {state.user.name}</h3>
+                    }
                 </div>
                 <IconButton
                     disabled={state.kind !== StateKind.DisplayingMessages || state.loadMessagesBefore != null}
@@ -158,7 +162,7 @@ const ChatMessage: React.FC<{ message: Message, isNew: boolean, align: string, c
     return (
         <div className={applyClasses()}>
             {align === 'left' && isNew &&
-                <IconButton disabled={true}>
+                <IconButton onClick={_ => dispatch(new LastMessageRead(message.id))}>
                     <ChatBubble visibility={0} color="primary"/>
                 </IconButton>
             }
@@ -183,7 +187,6 @@ const UsersTyping: React.FC<{ usersTyping: Set<UserId>, me: UserId }> = ({usersT
     );
 };
 
-// const keyPressSubject = new Subject();
 const ChatInput: React.FC<{ enabled: boolean }> = ({enabled}) => {
 
     // UI State

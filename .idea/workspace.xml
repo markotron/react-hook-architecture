@@ -2,9 +2,15 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="729520b8-d983-481a-8a84-8506637bf89b" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/src/service/UserService.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/chat/Chat.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/Chat.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/chat/StateMachine.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/chat/StateMachine.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/model/Model.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/model/Model.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/starred-messages/StarredMessages.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/starred-messages/StarredMessages.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/starred-messages/StateMachine.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/starred-messages/StateMachine.ts" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />

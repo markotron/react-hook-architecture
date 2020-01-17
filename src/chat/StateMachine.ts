@@ -1,9 +1,11 @@
-import {Message, UserId, Uuid} from "../model/Model";
+import {isUser, Message, User, UserId, Uuid} from "../model/Model";
 import {Set} from "immutable";
 import {Dispatch, Reducer} from "react";
 import {assertNever, feedbackFactory, noop, Unit, unsupportedAction} from "../Common";
 import messagingService from "../service/MessagingService";
+import userService from "../service/UserService";
 import {Subscription} from "rxjs";
+import _ from "lodash";
 
 // @formatter:off
 /**
@@ -25,6 +27,7 @@ export class DisplayingError {
 export class DisplayingMessages {
     kind = StateKind.DisplayingMessages as const;
     constructor(
+        readonly user: User | UserId,
         readonly messages: Array<Message>,
         readonly loadMessagesBefore?: Uuid | null,
         readonly messageToSend?: Message,
@@ -41,6 +44,7 @@ export const initialState = new Connecting();
  * Actions
  */
 export enum ActionKind {
+    UserLoaded = "UserLoaded",
     ErrorOccurred = "ErrorOccurred",
     NewMessage = "NewMessage",
     Connected = "Connected",
@@ -80,7 +84,7 @@ export class UserTyping {
     constructor(readonly isTyping: boolean, readonly userId?: UserId) { }
 }
 export class AllMessagesRead { kind = ActionKind.AllMessagesRead as const; }
-export class LastMessageReadFetched {
+export class LastMessageRead {
     kind = ActionKind.LastMessageReadFetched as const;
     constructor(readonly messageId: Uuid) { }
 }
@@ -89,10 +93,15 @@ export class StarMessage {
     constructor(readonly message: Message) { }
 }
 export class MessageStarred { kind = ActionKind.MessageStarred as const; }
+export class UserLoaded {
+    kind = ActionKind.UserLoaded as const;
+    constructor(readonly user: User) { }
+}
 
 export type Action = ErrorOccurred | Connected | MessageSent | NewMessage |
     SendMessage | LoadOlderMessages | OlderMessagesLoaded | UserTyping |
-    AllMessagesRead | LastMessageReadFetched | StarMessage | MessageStarred
+    AllMessagesRead | LastMessageRead | StarMessage | MessageStarred |
+    UserLoaded
 
 // @formatter:on
 /**
@@ -110,7 +119,9 @@ export const reducerWithProps: (me: UserId) => Reducer<State, Action> = (me) => 
             return new DisplayingError(action.errorMessage);
         case ActionKind.Connected:
             return state.kind === StateKind.Connecting ?
-                new DisplayingMessages([], null) : unsupportedAction(state, action);
+                new DisplayingMessages(me, [], null) : unsupportedAction(state, action);
+        case ActionKind.UserLoaded:
+            return assertAndCopy(_ => ({user: action.user}));
         case ActionKind.MessageSent:
             return assertAndCopy(_ => ({messageToSend: undefined}));
         case ActionKind.NewMessage:
@@ -156,6 +167,17 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
         }
     );
     useFeedback(
+        s => s.kind === StateKind.DisplayingMessages ? s.user : undefined,
+        userOrId => {
+            if(isUser(userOrId)) return noop;
+            const subscription = userService
+                .getUserWithId(userOrId)
+                .subscribe(user => dispatch(new UserLoaded(user)));
+            return () => subscription.unsubscribe();
+        }
+
+    );
+    useFeedback(
         s => s.kind === StateKind.DisplayingMessages ? s.messageToSend : undefined,
         message => {
             messagingService.sendMessage(message);
@@ -190,7 +212,7 @@ export const useFeedbacks = (me: UserId, state: State, dispatch: Dispatch<Action
                 subscription = messagingService
                     .fetchLastReadMessage(me)
                     .subscribe(
-                        (uuid: Uuid) => uuid !== null && dispatch(new LastMessageReadFetched(uuid.toString())),
+                        (uuid: Uuid) => uuid !== null && dispatch(new LastMessageRead(uuid.toString())),
                         (reason: any) => dispatch(new ErrorOccurred(reason.toString()))
                     );
             } else {
@@ -221,27 +243,26 @@ declare module "./StateMachine" {
         messageStarred: () => DisplayingMessages
     }
 }
+
 DisplayingMessages.prototype.copy = function (props) { // should be something like PartialProperties<DisplayMessages>
-    // Copying classes is hard.
     return Object.assign(Object.create(Object.getPrototypeOf(this)), {...this, ...props});
 };
+
 DisplayingMessages.prototype.updateTyping = function (id, isTyping) {
     return this.copy({usersTyping: isTyping ? this.usersTyping.add(id) : this.usersTyping.remove(id)});
 };
+
 DisplayingMessages.prototype.updateLastMessageRead = function () {
-    const length = this.messages.length;
-    if (length === 0) return this;
-    const lastReadMessage = this.messages[this.messages.length - 1];
-    return this.copy({lastReadMessageId: lastReadMessage.id})
+    const lastReadMessage = _.last(this.messages);
+    return lastReadMessage ? this.copy({lastReadMessageId: lastReadMessage.id}) : this;
 };
+
 DisplayingMessages.prototype.messageStarred = function () {
     const messageToStar = this.messageToStar;
     if (messageToStar === undefined) return this;
+    const predicate = (m: Message) => m.id !== message.id;
     const message = {...messageToStar, isStarred: !messageToStar.isStarred} as Message;
-    const messageToStarId = message.id;
-    const messageToStarIndex = this.messages.findIndex((m) => m.id === messageToStarId);
-    const beforeMessageToStar = this.messages.slice(0, messageToStarIndex);
-    const afterMessageToStar = this.messages.slice(messageToStarIndex + 1, this.messages.length);
-    const newMessages = [...beforeMessageToStar, message, ...afterMessageToStar];
-    return this.copy({messages: newMessages, messageToStar: undefined});
+    const before = _.takeWhile(this.messages, predicate);
+    const after = _.tail(_.dropWhile(this.messages, predicate));
+    return this.copy({messages: [...before, message, ...after], messageToStar: undefined})
 };
