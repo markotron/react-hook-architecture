@@ -1,5 +1,5 @@
 import React, {useReducer} from "react";
-import {UserId} from "../model/Model";
+import {isUser, UserId} from "../model/Model";
 import {initialState, LoadOlderMessages, reducerWithProps, useFeedbacks} from "./StateMachine";
 import {TableContainer} from "@material-ui/core";
 import Table from "@material-ui/core/Table";
@@ -22,41 +22,37 @@ const useStyles = makeStyles({
 
 export const StarredMessages: React.FC<{ me: UserId }> = ({me}) => {
 
-    const [state, dispatch] = useReducer(reducerWithProps, initialState);
+    const [state, dispatch] = useReducer(reducerWithProps, initialState(me));
     useFeedbacks(me, state, dispatch);
 
     const classes = useStyles();
-    return (
-        <Container fixed maxWidth="md">
-            <h1>Favorites</h1>
-            {!!state.error && <MuiAlert elevation={6} variant="filled" severity="error">{state.error}</MuiAlert>}
-            <div>
-                <IconButton onClick = {_ => dispatch(new LoadOlderMessages())}>
-                    <Autorenew />
-                </IconButton>
-            </div>
-            <TableContainer component={Paper}>
-                <Table className={classes.table} aria-label="simple table">
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Text</TableCell>
-                            <TableCell align="right">Message ID</TableCell>
-                            <TableCell align="right">User ID</TableCell>
+    let container = <Container fixed maxWidth="sm">
+        <h1>Favorites</h1>
+        {!!state.error && <MuiAlert elevation={6} variant="filled" severity="error">{state.error}</MuiAlert>}
+        <div>
+            <IconButton onClick={_ => dispatch(new LoadOlderMessages())}>
+                <Autorenew/>
+            </IconButton>
+            {isUser(state.user) && <h3>User name: {state.user.name}</h3>}
+        </div>
+        <TableContainer component={Paper}>
+            <Table className={classes.table} aria-label="simple table">
+                <TableHead>
+                    <TableRow>
+                        <TableCell>Text</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {state.messages.map(m => (
+                        <TableRow key={m.id}>
+                            <TableCell component="th" scope="row">
+                                {m.message}
+                            </TableCell>
                         </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {state.messages.map(m => (
-                            <TableRow key={m.id}>
-                                <TableCell component="th" scope="row">
-                                    {m.message}
-                                </TableCell>
-                                <TableCell align="right">{m.id}</TableCell>
-                                <TableCell align="right">{m.userId}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </Container>
-    );
+                    ))}
+                </TableBody>
+            </Table>
+        </TableContainer>
+    </Container>;
+    return container;
 };
