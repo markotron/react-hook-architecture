@@ -1,17 +1,17 @@
 import {User, UserId} from "../model/Model";
 import Axios from "axios-observable";
-import {map, publishReplay, refCount, retry, share, tap} from "rxjs/operators";
+import {map, share, tap} from "rxjs/operators";
 import {Observable, of} from "rxjs";
 import {unsupported} from "../Common";
 import LRU from "lru-cache";
 
+interface UserService {
+    getUserWithId: (id: UserId) => Observable<User>
+}
+
 interface ValueAndRequest<Value> {
     value?: Value
     request: Observable<Value>
-}
-
-interface UserService {
-    getUserWithId: (id: UserId) => Observable<User>
 }
 
 class UserServiceImpl implements UserService {
@@ -36,8 +36,7 @@ class UserServiceImpl implements UserService {
             .pipe(
                 map(response => response.data),
                 tap(user => this.cacheUser(id, user)),
-                publishReplay(1),
-                refCount()
+                share(),
             );
         this.userCache.set(id, {
            request: userRequest

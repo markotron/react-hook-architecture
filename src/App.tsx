@@ -1,8 +1,8 @@
-import React from 'react';
+import React, {useState} from 'react';
 import './App.css';
 import {Chat} from "./chat/Chat";
 import {StarredMessages} from "./starred-messages/StarredMessages";
-import {Grid} from "@material-ui/core";
+import {Button, Grid} from "@material-ui/core";
 import {useUrlSearchParams} from "use-url-search-params";
 import {UserLoader} from "./user-loader/UserLoader";
 
@@ -11,8 +11,9 @@ function randUser() {
 }
 
 function App() {
-    const [user] = useUrlSearchParams({userId: 0}, {userId: Number});
-    const userId: number = Number(user.userId);
+    // const [user] = useUrlSearchParams({userId: 0}, {userId: Number});
+    const [displayUserLoader, setDisplayUserLoader] = useState(true);
+    // const userId: number = Number(user.userId);
     return (
         <div>
             {/*<Grid container spacing={3}>*/}
@@ -24,7 +25,8 @@ function App() {
             {/*    </Grid>*/}
             {/*</Grid>*/}
             <Grid>
-                <UserLoader />
+                <Button onClick = {_ => setDisplayUserLoader(!displayUserLoader)}>Toggle component</Button>
+                {displayUserLoader && <UserLoader />}
             </Grid>
         </div>
     )
